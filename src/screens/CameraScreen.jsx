@@ -9,7 +9,7 @@ import {
   StyleSheet,
   Dimensions,
   ScrollView,
-  SafeAreaView
+  SafeAreaView,
 } from "react-native";
 import { Camera, useCameraDevice } from "react-native-vision-camera";
 import { useNavigation } from "@react-navigation/native";
@@ -23,33 +23,27 @@ const CameraScreen = () => {
 
   const [photos, setPhotos] = useState([]);
   const [isCameraActive, setIsCameraActive] = useState(true);
-  const [currentView, setCurrentView] = useState("top");
+  const [currentView, setCurrentView] = useState("front");
   const [showAllPhotos, setShowAllPhotos] = useState(false);
   const [lastCapturedPhoto, setLastCapturedPhoto] = useState(null);
 
   const guideImages = {
-    top: require("../assets/top.jpg"),
-    left: require("../assets/left.jpg"),
-    right: require("../assets/right.jpg"),
+    front: require("../assets/top.jpg"),
     back: require("../assets/back.jpg"),
   };
 
   const viewTitles = {
-    top: "Top View",
-    left: "Left View",
-    right: "Right View",
+    front: "Front View",
     back: "Back View",
   };
 
   const viewInstructions = {
-    top: "Take a photo of your hair from the top angle",
-    left: "Take a photo of the left side of your head",
-    right: "Take a photo of the right side of your head",
+    front: "Take a photo of your hair from the front angle",
     back: "Take a photo of the back of your head",
   };
 
   const startAnalysis = () => {
-    navigation.navigate("ResultsScreen");
+    navigation.navigate("ResultsScreen", { photos });
   };
 
   const requestPermissions = async () => {
@@ -62,7 +56,10 @@ const CameraScreen = () => {
       );
     }
 
-    if (cameraPermission !== "authorized" || microphonePermission !== "authorized") {
+    if (
+      cameraPermission !== "authorized" ||
+      microphonePermission !== "authorized"
+    ) {
       console.warn("Permissions not granted!");
     }
   };
@@ -86,10 +83,10 @@ const CameraScreen = () => {
   const confirmPhoto = () => {
     setPhotos((prevPhotos) => {
       const newPhotos = [...prevPhotos, { view: currentView, path: lastCapturedPhoto }];
-      if (newPhotos.length === 4) {
+      if (newPhotos.length === 2) {
         setShowAllPhotos(true);
       } else {
-        const viewsOrder = ["top", "left", "right", "back"];
+        const viewsOrder = ["front", "back"];
         const currentIndex = viewsOrder.indexOf(currentView);
         if (currentIndex < viewsOrder.length - 1) {
           setCurrentView(viewsOrder[currentIndex + 1]);
@@ -119,13 +116,13 @@ const CameraScreen = () => {
     <SafeAreaView style={styles.safeArea}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Hair Scan</Text>
+        <Text style={styles.headerTitle}>Hair Health Scan</Text>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.closeButton}>×</Text>
         </TouchableOpacity>
       </View>
 
-      {/* All Photos Review */}
+      {/* Review Photos */}
       {showAllPhotos ? (
         <View style={styles.allPhotosContainer}>
           <Text style={styles.allPhotosTitle}>Review Your Photos</Text>
@@ -206,7 +203,7 @@ const CameraScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#fff" },
+  safeArea: { flex: 1, backgroundColor: "#ffffff" },
 
   header: {
     flexDirection: "row",
@@ -215,16 +212,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 10,
     borderBottomWidth: 0.5,
-    borderBottomColor: "#e5e5e5",
+    borderBottomColor: "#a8d5b9",
   },
-  headerTitle: { fontSize: 20, fontWeight: "600", color: "#111" },
-  closeButton: { fontSize: 28, color: "#555" },
+  headerTitle: { fontSize: 20, fontWeight: "700", color: "#0b8a46" },
+  closeButton: { fontSize: 28, color: "#0b8a46" },
 
   cameraViewContainer: { flex: 1, justifyContent: "space-between" },
   guideContainer: { alignItems: "center", paddingHorizontal: 20, paddingTop: 10 },
-  viewTitle: { fontSize: 20, fontWeight: "500", marginBottom: 8, color: "#111" },
+  viewTitle: { fontSize: 20, fontWeight: "600", marginBottom: 8, color: "#0b8a46" },
   guideImage: { width: width * 0.4, height: height * 0.15, borderRadius: 16, marginBottom: 10 },
-  guideText: { fontSize: 15, textAlign: "center", color: "#666" },
+  guideText: { fontSize: 15, textAlign: "center", color: "#333" },
 
   cameraContainer: {
     width: "90%",
@@ -241,14 +238,14 @@ const styles = StyleSheet.create({
     height: 78,
     borderRadius: 39,
     borderWidth: 3,
-    borderColor: "#007AFF",
+    borderColor: "#0b8a46",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0,122,255,0.1)",
+    backgroundColor: "rgba(11,138,70,0.1)",
     alignSelf: "center",
     marginBottom: 30,
   },
-  captureButtonInner: { width: 58, height: 58, borderRadius: 29, backgroundColor: "#007AFF" },
+  captureButtonInner: { width: 58, height: 58, borderRadius: 29, backgroundColor: "#0b8a46" },
 
   previewContainer: { flex: 1, justifyContent: "space-between" },
   previewImage: {
@@ -257,40 +254,53 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignSelf: "center",
     borderWidth: 1,
-    borderColor: "#e0e0e0",
+    borderColor: "#a8d5b9",
   },
-  previewButtons: { flexDirection: "row", justifyContent: "space-around", paddingHorizontal: 20, paddingBottom: 30 },
+  previewButtons: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    paddingHorizontal: 20,
+    paddingBottom: 30,
+  },
 
   primaryButton: {
-    backgroundColor: "#007AFF",
+    backgroundColor: "#0b8a46",
     paddingVertical: 14,
     paddingHorizontal: 25,
     borderRadius: 30,
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 3,
     minWidth: width * 0.35,
   },
   primaryButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
 
   secondaryButton: {
-    backgroundColor: "#f2f2f7",
+    backgroundColor: "#e6f5ec",
     paddingVertical: 14,
     paddingHorizontal: 25,
     borderRadius: 30,
     alignItems: "center",
     minWidth: width * 0.35,
   },
-  secondaryButtonText: { color: "#111", fontSize: 16, fontWeight: "500" },
+  secondaryButtonText: { color: "#0b8a46", fontSize: 16, fontWeight: "500" },
 
   allPhotosContainer: { flex: 1, paddingTop: 20, paddingBottom: 30 },
-  allPhotosTitle: { fontSize: 20, fontWeight: "600", textAlign: "center", marginBottom: 20, color: "#111" },
+  allPhotosTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    textAlign: "center",
+    marginBottom: 20,
+    color: "#0b8a46",
+  },
   photosGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", paddingBottom: 20 },
   photoCard: { width: width * 0.45, margin: 8, alignItems: "center" },
-  capturedImage: { width: "100%", height: 150, borderRadius: 16, borderWidth: 1, borderColor: "#e0e0e0" },
-  photoLabel: { fontSize: 14, marginTop: 5, color: "#444" },
+  capturedImage: {
+    width: "100%",
+    height: 150,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#a8d5b9",
+  },
+  photoLabel: { fontSize: 14, marginTop: 5, color: "#0b8a46" },
 });
 
 export default CameraScreen;

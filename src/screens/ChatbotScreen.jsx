@@ -16,6 +16,8 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import Icon from "react-native-vector-icons/Feather";
 import LinearGradient from "react-native-linear-gradient";
+import axios from "axios";
+import {config} from '../config'
 
 const { width, height } = Dimensions.get("window");
 
@@ -33,11 +35,40 @@ const ChatbotScreen = () => {
       text: "👋 Hello! How can I help with your hair today?",
     },
   ]);
+  const [buttons, setButtons] = useState([]);
   const [inputText, setInputText] = useState("");
   const scrollRef = useRef();
 
   useEffect(() => {
     // Animate in: bottom -> center
+    const fetchInitialData = async () => {
+      try {
+        const response = await axios.get(`${config.AI_API_URL}/chat/get_welcome`); 
+        const { question_buttons, text } = response.data;
+        setMessages([
+          {
+            id: 1,
+            sender: "bot",
+            text: text || "👋 Hello! How can I help with your hair today?",
+          },
+        ]);
+
+        // Set buttons from response
+        setButtons(question_buttons || []);
+      } catch (error) {
+        console.error("Error fetching initial data:", error);
+        // Fallback message in case of error
+        setMessages([
+          {
+            id: 1,
+            sender: "bot",
+            text: "👋 Hello! How can I help with your hair today?",
+          },
+        ]);
+      }
+    };
+
+    fetchInitialData();
     Animated.timing(translateY, {
       toValue: 0,
       duration: 350,
@@ -61,24 +92,47 @@ const ChatbotScreen = () => {
     });
   };
 
-  const handleSend = () => {
-    if (!inputText.trim()) return;
+  const fetchAnswer = async (queryText) => {
+    try {
+      let response = await axios.post(`${config.AI_API_URL}/chat/generate`, {
+        query: queryText,
+      });
+      console.log(response.data)
+      const resultText = response.data?.text;
+      const answers = Array.isArray(response.data?.answers) ? response.data.answers : [];
 
-    const newMessage = { id: Date.now(), sender: "user", text: inputText };
-    setMessages((prev) => [...prev, newMessage]);
-    setInputText("");
+      let thisResultText = resultText ? `${resultText}\n` : '';
+      if (answers.length) {
+        const answerLines = answers.map((item, index) => `${index} - ${item}`);
+        thisResultText += answerLines.join('\n\n');
+      }
 
-    // Simulate bot reply
-    setTimeout(() => {
       setMessages((prev) => [
         ...prev,
         {
           id: Date.now() + 1,
           sender: "bot",
-          text: "✨ Thanks for sharing! I'm analyzing your concern...",
+          text: thisResultText,
         },
       ]);
-    }, 1000);
+
+      setButtons(response.data.question_buttons || []);
+    } catch (error) {
+      console.error("Error fetching initial data:", error);
+    }
+  };
+  const handleSubmit = async (text) => {
+    var thisText = null
+    if (typeof text == "string" && text.trim()){
+      thisText = text
+    }else{
+      thisText = inputText.trim()
+    }
+    if (thisText == null) return;
+    const newMessage = { id: Date.now(), sender: "user", text: thisText };
+    setMessages((prev) => [...prev, newMessage]);
+    setInputText("");
+    await fetchAnswer(thisText);
   };
 
   useEffect(() => {
@@ -114,23 +168,38 @@ const ChatbotScreen = () => {
             keyboardShouldPersistTaps="handled"
           >
             {messages.map((msg) => (
-              <View
-                key={msg.id}
-                style={[
-                  styles.message,
-                  msg.sender === "bot" ? styles.botMessage : styles.userMessage,
-                ]}
-              >
-                <Text
+              msg.text && msg.text.trim() !== "" ? (
+                <View
+                  key={msg.id}
                   style={[
-                    styles.messageText,
-                    msg.sender === "bot" ? styles.botText : styles.userText,
+                    styles.message,
+                    msg.sender === "bot" ? styles.botMessage : styles.userMessage,
                   ]}
                 >
-                  {msg.text}
-                </Text>
-              </View>
+                  <Text
+                    style={[
+                      styles.messageText,
+                      msg.sender === "bot" ? styles.botText : styles.userText,
+                    ]}
+                  >
+                    {msg.text}
+                  </Text>
+                </View>
+              ) : null
             ))}
+            {buttons.length > 0 && (
+              <View style={styles.buttonsContainer}>
+                {buttons.map((buttonText, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.optionsButton}
+                    onPress={() => handleSubmit(buttonText)}
+                  >
+                    <Text style={styles.optionsText}>{buttonText}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
           </ScrollView>
 
           {/* Input Area */}
@@ -149,7 +218,7 @@ const ChatbotScreen = () => {
               />
               <TouchableOpacity
                 style={styles.sendButton}
-                onPress={handleSend}
+                onPress={handleSubmit}
                 activeOpacity={0.8}
               >
                 <Icon name="send" size={20} color="#fff" />
@@ -214,7 +283,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 4,
   },
   messageText: {
-    fontSize: 15,
+    fontSize: 16,
     lineHeight: 21,
   },
   botText: {
@@ -243,7 +312,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 10,
     maxHeight: 120,
-    fontSize: 15,
+    fontSize: 15
   },
   sendButton: {
     backgroundColor: "#2e7d32",
@@ -258,6 +327,37 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 3,
     elevation: 3,
+  },
+  buttonsContainer: {
+    flexDirection: 'row', // Arrange buttons in a row
+    flexWrap: 'wrap', // Wrap to next line if overflowing
+    marginTop: 6, // Spacing below response
+    gap: 8, // Space between buttons
+  },
+  optionsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4, // Smaller padding
+    paddingHorizontal: 8, // Smaller padding
+    backgroundColor: '#e8ecef', // Slightly darker background for contrast
+    borderRadius: 10, // Smaller rounded corners
+    // Subtle shadow for depth
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2, // For Android shadow
+  },
+  optionsIcon: {
+    fontSize: 16,
+    color: '#333',
+    marginRight: 4,
+  },
+  optionsText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
   },
 });
 

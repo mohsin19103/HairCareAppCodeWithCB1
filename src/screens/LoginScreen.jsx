@@ -18,7 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const LoginScreen = () => {
   const navigation = useNavigation();
-
+  const url = "http://10.141.70.3:8080"
   const [step, setStep] = useState('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -75,7 +75,7 @@ const LoginScreen = () => {
 
     try {
       setLoading(true);
-      const response = await axios.post('http://172.20.10.4:8080/login', {
+      const response = await axios.post(`${url}/login`, {
         email: username,
         password,
       });
@@ -100,6 +100,7 @@ const LoginScreen = () => {
         });
       }
     } catch (error) {
+      console.error(error)
       setLoading(false);
       Toast.show({
         type: 'error',
@@ -116,7 +117,7 @@ const LoginScreen = () => {
     }
     try {
       setLoading(true);
-      await axios.post('http://172.20.10.4:8080/login/forgotPassword', { email: username });
+      await axios.post('http://10.21.161.3:8080/login/forgotPassword', { email: username });
       setLoading(false);
       Toast.show({ type: 'success', text1: 'Verification code sent' });
       setStep('verifyCode');
@@ -144,7 +145,7 @@ const LoginScreen = () => {
     }
     try {
       setLoading(true);
-      const res = await axios.post('http://172.20.10.4:8080/login/email_verification', {
+      const res = await axios.post('http://10.21.161.3:8080/login/email_verification', {
         email: username,
         verificationCode: code,
       });

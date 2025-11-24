@@ -18,6 +18,7 @@ import VerificationScreen from "./src/screens/VerificationScreen";
 import Feedback from "./src/screens/Feedback";
 import Report from "./src/screens/Report";
 import ProfileScreen from "./src/screens/ProfileScreen";
+import ResultScreen from "./src/screens/ResultScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -71,6 +72,11 @@ const App = () => {
           <Stack.Screen name="Report" component={Report} />
           <Stack.Screen name="ResultsScreen" component={ResultsScreen} />
           <Stack.Screen name="profileScreen" component={ProfileScreen} />
+          <Stack.Screen
+            name="ResultScreen"
+            component={ResultScreen}
+            options={{ title: "Analysis Details" }}
+          />
 
 
           {/* ✅ Chatbot behaves like modal (opens bottom→top, closes top→bottom) */}

@@ -1,54 +1,113 @@
-import React, { useEffect, useRef } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing } from "react-native";
-import { useNavigation } from '@react-navigation/native';
+import React, { useEffect, useRef, useState } from "react";
+import { View, Text, TouchableOpacity, StyleSheet, Animated, ActivityIndicator } from "react-native";
+import { useNavigation, useRoute } from '@react-navigation/native';
 import LinearGradient from "react-native-linear-gradient";
+import { config } from "../config";
 
 const ResultsScreen = () => {
   const navigation = useNavigation();
+  const route = useRoute();
+  const photos = route.params?.photos || [];
   const spinValue = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const [loading, setLoading] = useState(true);
+
+ const getResult = async () => {
+  if (photos.length === 0) return;
+
+  try {
+    const formData = new FormData();
+    photos.forEach((image, index) => {
+      formData.append('images', {
+        uri: `file://${image.path}`,
+        type: 'image/jpeg',
+        name: `image_${image.view}_${index}.jpg`,
+      });
+      formData.append(`view_${index}`, image.view);
+    });
+
+    console.log('📸 Sending images to API...');
+    console.log('Number of photos:', photos.length);
+    photos.forEach((photo, index) => {
+      console.log(`Photo ${index + 1}:`, photo);
+    });
+
+    const response = await fetch(`${config.AI_API_URL}/predict/image`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'multipart/form-data' },
+      body: formData,
+    });
+
+    const result = await response.json();
+    
+    // ✅ YAHAN PAR RESULT CONSOLE PE PRINT HOGA
+    console.log('🎯 FULL API RESPONSE:', JSON.stringify(result, null, 2));
+    console.log('🔍 Disease:', result.result?.disease);
+    console.log('📊 Confidence:', result.result?.confidence);
+    console.log('📑 Sections:', Object.keys(result.result?.sections || {}));
+
+    if (result.result) {
+      let responseData = result;
+      navigation.navigate('ResultScreen', { responseData });
+    } else {
+      throw new Error(result.message || 'Upload failed');
+    }
+  } catch (error) {
+    console.log('❌ Upload Error:', error);
+  }
+};
 
   useEffect(() => {
-    const animation = Animated.loop(
+    // Start animations
+    Animated.loop(
       Animated.timing(spinValue, {
         toValue: 1,
-        duration: 2000,
-        easing: Easing.linear,
+        duration: 1500,
         useNativeDriver: true,
       })
-    );
-    animation.start();
-    
-    return () => animation.stop(); // Cleanup animation
+    ).start();
+
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 800,
+      useNativeDriver: true,
+    }).start();
+
+    // Wait 3 seconds before API call
+    const timer = setTimeout(() => {
+      setLoading(false);
+      getResult();
+    }, 3000);
+
+    return () => clearTimeout(timer);
   }, []);
 
   const spin = spinValue.interpolate({
     inputRange: [0, 1],
-    outputRange: ['0deg', '360deg']
+    outputRange: ['0deg', '360deg'],
   });
 
   return (
-    <LinearGradient 
-      colors={["#1a052f", "#0d001a"]} 
-      style={styles.container}
-    >
-      <View style={styles.resultContainer}>
-        <Animated.View style={[styles.gearIcon, { transform: [{ rotate: spin }] }]}>
-          <Text style={styles.gearText}>⚙️</Text>
+    <LinearGradient colors={["#e9fff3", "#ffffff"]} style={styles.container}>
+      <Animated.View style={[styles.card, { opacity: fadeAnim }]}>
+        <Animated.View style={[styles.loader, { transform: [{ rotate: spin }] }]}>
+          <ActivityIndicator size="large" color="#00b894" />
         </Animated.View>
-        
-        <Text style={styles.resultTitle}>Coming Soon!</Text>
-        <Text style={styles.resultText}>
-          Our AI hair analysis feature is currently in development.
-          {"\n\n"}We'll be launching this exciting functionality soon!
+
+        <Text style={styles.title}>
+          {loading ? "Analyzing..." : "Generating Results..."}
         </Text>
-        
+        <Text style={styles.subtitle}>
+          Please wait while we process your {photos.length} image(s).
+        </Text>
+
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Text style={styles.backButtonText}>Back to Camera</Text>
+          <Text style={styles.backText}>Back to Camera</Text>
         </TouchableOpacity>
-      </View>
+      </Animated.View>
     </LinearGradient>
   );
 };
@@ -56,46 +115,46 @@ const ResultsScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
-  resultContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  card: {
+    backgroundColor: "#ffffff",
+    width: "85%",
+    borderRadius: 20,
+    alignItems: "center",
     padding: 30,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 8,
   },
-  gearIcon: {
-    marginBottom: 30,
+  loader: {
+    marginBottom: 25,
   },
-  gearText: {
-    fontSize: 80,
-    textAlign: 'center',
+  title: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#00b894",
+    marginBottom: 10,
   },
-  resultTitle: {
-    color: '#9c4dff',
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  resultText: {
-    color: '#ccc',
-    fontSize: 18,
-    textAlign: 'center',
-    lineHeight: 26,
+  subtitle: {
+    fontSize: 16,
+    color: "#555",
+    textAlign: "center",
     marginBottom: 40,
-    paddingHorizontal: 20,
   },
   backButton: {
-    backgroundColor: '#9c4dff',
-    paddingVertical: 15,
-    paddingHorizontal: 40,
-    borderRadius: 30,
+    backgroundColor: "#00b894",
+    borderRadius: 25,
+    paddingVertical: 12,
+    paddingHorizontal: 35,
   },
-  backButtonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
+  backText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
   },
 });
 
-export default ResultsScreen; // Changed to default export
+export default ResultsScreen;
