@@ -1,21 +1,48 @@
-//this is result screen 2 where actully the model gernate result 
 import React, { useState, useRef, useEffect } from "react";
-import { View, Text, ScrollView, StyleSheet, Animated } from "react-native";
-import { useRoute } from "@react-navigation/native";
+import { 
+  View, 
+  Text, 
+  ScrollView, 
+  StyleSheet, 
+  Animated, 
+  TouchableOpacity,
+  BackHandler 
+} from "react-native";
+import { useRoute, useNavigation } from "@react-navigation/native";
 import LinearGradient from "react-native-linear-gradient";
+import Icon from "react-native-vector-icons/Feather";
 
 const ResultScreen = () => {
   const route = useRoute();
+  const navigation = useNavigation();
   const responseData = route?.params?.responseData;
   const [displayData, setDisplayData] = useState({});
   const [isTyping, setIsTyping] = useState(true);
-  const [currentCard, setCurrentCard] = useState("");
+  const [currentCard, setCurrentCard] = useState("header");
+  const [visibleCards, setVisibleCards] = useState(["header"]); // Only show current card
   const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  // Handle back button press
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      handleBackPress();
+      return true; // Prevent default back behavior
+    });
+
+    return () => backHandler.remove();
+  }, []);
+
+  const handleBackPress = () => {
+    navigation.navigate('Scanner'); // Navigate to Scanner screen
+  };
 
   if (!responseData || !responseData.result) {
     return (
       <View style={styles.centerContainer}>
         <Text style={styles.errorText}>⚠️ No data available</Text>
+        <TouchableOpacity style={styles.backButton} onPress={handleBackPress}>
+          <Text style={styles.backButtonText}>Back to Scanner</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -81,17 +108,10 @@ const ResultScreen = () => {
       useNativeDriver: true,
     }).start();
 
-    // Initialize all cards with dot
-    const initialData = {
-      header: "●",
-    };
-    
-    // Initialize section cards with dots
-    Object.keys(sections).forEach(key => {
-      initialData[key] = "●";
+    // Initialize header with dot
+    setDisplayData({
+      header: "●"
     });
-    
-    setDisplayData(initialData);
 
     // Wait a bit before starting to type
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -103,11 +123,29 @@ const ResultScreen = () => {
     await new Promise(resolve => setTimeout(resolve, 400));
 
     // Type each section card sequentially
-    for (const sectionKey of Object.keys(sections)) {
+    const sectionKeys = Object.keys(sections);
+    for (let i = 0; i < sectionKeys.length; i++) {
+      const sectionKey = sectionKeys[i];
+      
+      // Add next card to visible cards
+      setVisibleCards(prev => [...prev, sectionKey]);
       setCurrentCard(sectionKey);
+      
+      // Initialize with dot
+      setDisplayData(prev => ({
+        ...prev,
+        [sectionKey]: "●"
+      }));
+
+      await new Promise(resolve => setTimeout(resolve, 200));
+
       const sectionContent = formatSectionContent(sections[sectionKey]);
       await typeText(sectionContent, sectionKey);
-      await new Promise(resolve => setTimeout(resolve, 400)); // Pause between cards
+      
+      // Pause before next card (except for last card)
+      if (i < sectionKeys.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 400));
+      }
     }
 
     setIsTyping(false);
@@ -227,42 +265,56 @@ const ResultScreen = () => {
       end={{ x: 1, y: 1 }}
       style={styles.gradientContainer}
     >
+      {/* Back Button Header */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButtonHeader} onPress={handleBackPress}>
+          <Icon name="arrow-left" size={24} color="#2e7d32" />
+          <Text style={styles.backButtonTextHeader}>Back to Scanner</Text>
+        </TouchableOpacity>
+      </View>
+
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header Card */}
-        <Animated.View style={[styles.headerCard, { opacity: fadeAnim }]}>
-          {renderHeaderContent()}
-        </Animated.View>
-
-        {/* Section Cards */}
-        {Object.keys(sections).map((sectionKey) => (
-          <Animated.View 
-            key={sectionKey} 
-            style={[
-              styles.sectionCard, 
-              { 
-                opacity: fadeAnim,
-                // Slightly dim cards that haven't been typed yet
-                opacity: !displayData[sectionKey] || displayData[sectionKey] === "●" ? 0.7 : 1
-              }
-            ]}
-          >
-            <Text style={styles.sectionTitle}>
-              {sectionKey}
-              {isTyping && currentCard === sectionKey && (
-                <Text style={styles.cursor}>|</Text>
-              )}
-            </Text>
-            {renderSectionContent(sectionKey)}
+        {/* Header Card - Always visible once started */}
+        {visibleCards.includes("header") && (
+          <Animated.View style={[styles.headerCard, { opacity: fadeAnim }]}>
+            {renderHeaderContent()}
           </Animated.View>
+        )}
+
+        {/* Section Cards - Only show visible ones */}
+        {Object.keys(sections).map((sectionKey) => (
+          visibleCards.includes(sectionKey) && (
+            <Animated.View 
+              key={sectionKey} 
+              style={[styles.sectionCard, { opacity: fadeAnim }]}
+            >
+              <Text style={styles.sectionTitle}>
+                {sectionKey}
+                {isTyping && currentCard === sectionKey && (
+                  <Text style={styles.cursor}>|</Text>
+                )}
+              </Text>
+              {renderSectionContent(sectionKey)}
+            </Animated.View>
+          )
         ))}
 
-        <Text style={styles.footerText}>
-          AI-powered Hair Analysis • v1.0
-          {isTyping && <Text style={styles.cursor}>|</Text>}
-        </Text>
+        {/* Footer - Only show when all typing is complete */}
+        {!isTyping && (
+          <Text style={styles.footerText}>
+            AI-powered Hair Analysis • v1.0
+          </Text>
+        )}
+
+        {/* Back Button at Bottom */}
+        {!isTyping && (
+          <TouchableOpacity style={styles.bottomBackButton} onPress={handleBackPress}>
+            <Text style={styles.bottomBackButtonText}>Scan Again</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </LinearGradient>
   );
@@ -286,9 +338,28 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: "#e74c3c",
     fontWeight: "600",
+    marginBottom: 20,
   },
 
-  // Header
+  // Header with back button
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 60,
+    paddingBottom: 10,
+  },
+  backButtonHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+  },
+  backButtonTextHeader: {
+    fontSize: 16,
+    color: "#2e7d32",
+    fontWeight: "600",
+    marginLeft: 8,
+  },
+
+  // Header Card
   headerCard: {
     backgroundColor: "#fff",
     borderRadius: 16,
@@ -384,6 +455,33 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#95a5a6",
     marginTop: 20,
+    marginBottom: 20,
+  },
+
+  // Back Buttons
+  backButton: {
+    backgroundColor: "#00b894",
+    borderRadius: 25,
+    paddingVertical: 12,
+    paddingHorizontal: 35,
+  },
+  backButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  bottomBackButton: {
+    backgroundColor: "#00b894",
+    borderRadius: 25,
+    paddingVertical: 15,
+    paddingHorizontal: 40,
+    alignItems: "center",
+    marginTop: 10,
+  },
+  bottomBackButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
   },
 });
 

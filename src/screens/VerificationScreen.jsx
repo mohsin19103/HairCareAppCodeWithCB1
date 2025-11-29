@@ -17,6 +17,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { BASE_URL } from '../config/Api';
 
 const { width } = Dimensions.get('window');
 
@@ -82,7 +83,7 @@ const VerificationScreen = () => {
     }
     setIsLoading(true);
     try {
-      const response = await axios.post('http://172.20.10.4:8080/signup/email_verification', {
+      const response = await axios.post('${ BASE_URL}/signup/email_verification', {
         email, verificationCode: code
       }, { timeout: 10000 });
 
@@ -101,7 +102,7 @@ const VerificationScreen = () => {
   const handleResend = async () => {
     if (!canResend) return;
     try {
-      await axios.post('http://172.20.10.4:8080/signup/resend_verification', { email });
+      await axios.post('${ BASE_URL}/signup/resend_verification', { email });
       setResendTimer(30);
       setCanResend(false);
       Alert.alert('Success', 'Verification code resent');

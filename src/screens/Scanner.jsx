@@ -97,12 +97,14 @@ const Scanner = () => {
 
           <TouchableOpacity style={styles.navItem} activeOpacity={0.8}>
             <Ionicons name="leaf-outline" size={26} color="#4f4f4f" />
-            <Text style={styles.navText}>Haircare</Text>
+            <Text style={styles.navText}>weekly plan</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.navItem} activeOpacity={0.8}>
+          <TouchableOpacity style={styles.navItem} activeOpacity={0.8}
+             onPress={() => navigation.navigate("UserHistory")}
+            >
             <Ionicons name="person-outline" size={26} color="#4f4f4f" />
-            <Text style={styles.navText}>Style</Text>
+            <Text style={styles.navText}>Hair History</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.navItem} activeOpacity={0.8}>

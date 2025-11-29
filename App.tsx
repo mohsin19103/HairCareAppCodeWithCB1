@@ -19,7 +19,8 @@ import Feedback from "./src/screens/Feedback";
 import Report from "./src/screens/Report";
 import ProfileScreen from "./src/screens/ProfileScreen";
 import ResultScreen from "./src/screens/ResultScreen";
-
+import UserHistory from "./src/screens/UserHistory";
+import HistoryDetail from "./src/screens/HistoryDetail";
 const Stack = createNativeStackNavigator();
 
 const App = () => {
@@ -72,6 +73,8 @@ const App = () => {
           <Stack.Screen name="Report" component={Report} />
           <Stack.Screen name="ResultsScreen" component={ResultsScreen} />
           <Stack.Screen name="profileScreen" component={ProfileScreen} />
+           <Stack.Screen name="UserHistory" component={UserHistory} />
+           <Stack.Screen name="HistoryDetail" component={HistoryDetail} />
           <Stack.Screen
             name="ResultScreen"
             component={ResultScreen}
