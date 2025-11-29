@@ -15,10 +15,11 @@ import { useNavigation } from '@react-navigation/native';
 import axios from 'axios';
 import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { BASE_URL } from '../config/Api';
 
 const LoginScreen = () => {
   const navigation = useNavigation();
-  const url = "http://10.141.70.3:8080"
+  const url =  BASE_URL
   const [step, setStep] = useState('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -117,7 +118,7 @@ const LoginScreen = () => {
     }
     try {
       setLoading(true);
-      await axios.post('http://10.21.161.3:8080/login/forgotPassword', { email: username });
+    await axios.post(`${url}/login/forgotPassword`, { email: username });
       setLoading(false);
       Toast.show({ type: 'success', text1: 'Verification code sent' });
       setStep('verifyCode');
@@ -145,7 +146,7 @@ const LoginScreen = () => {
     }
     try {
       setLoading(true);
-      const res = await axios.post('http://10.21.161.3:8080/login/email_verification', {
+      const res = await axios.post('${url}/login/email_verification', {
         email: username,
         verificationCode: code,
       });

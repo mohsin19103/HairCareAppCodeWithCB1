@@ -33,10 +33,12 @@ const ChatbotScreen = () => {
       id: 1,
       sender: "bot",
       text: "👋 Hello! How can I help with your hair today?",
+      isTyping: false,
     },
   ]);
   const [buttons, setButtons] = useState([]);
   const [inputText, setInputText] = useState("");
+  const [isBotTyping, setIsBotTyping] = useState(false);
   const scrollRef = useRef();
 
   useEffect(() => {
@@ -50,6 +52,7 @@ const ChatbotScreen = () => {
             id: 1,
             sender: "bot",
             text: text || "👋 Hello! How can I help with your hair today?",
+            isTyping: false,
           },
         ]);
 
@@ -63,6 +66,7 @@ const ChatbotScreen = () => {
             id: 1,
             sender: "bot",
             text: "👋 Hello! How can I help with your hair today?",
+            isTyping: false,
           },
         ]);
       }
@@ -92,44 +96,125 @@ const ChatbotScreen = () => {
     });
   };
 
+  // Function to simulate typing effect
+  const typeText = (text, messageId, onComplete) => {
+    let index = 0;
+    const typingSpeed = 20; // milliseconds per character
+    
+    const typingInterval = setInterval(() => {
+      if (index <= text.length) {
+        setMessages(prev => prev.map(msg => 
+          msg.id === messageId 
+            ? { ...msg, text: text.substring(0, index) }
+            : msg
+        ));
+        index++;
+      } else {
+        clearInterval(typingInterval);
+        setIsBotTyping(false);
+        if (onComplete) onComplete();
+      }
+    }, typingSpeed);
+  };
+
   const fetchAnswer = async (queryText) => {
     try {
+      setIsBotTyping(true);
+      
+      // Add a temporary typing message
+      const typingMessageId = Date.now() + 1;
+      setMessages(prev => [
+        ...prev,
+        {
+          id: typingMessageId,
+          sender: "bot",
+          text: "●", // Show dot initially like ChatGPT
+          isTyping: true,
+        },
+      ]);
+
       let response = await axios.post(`${config.AI_API_URL}/chat/generate`, {
         query: queryText,
       });
-      console.log(response.data)
+      
+      console.log(response.data);
       const resultText = response.data?.text;
       const answers = Array.isArray(response.data?.answers) ? response.data.answers : [];
 
+      // Format the response text
       let thisResultText = resultText ? `${resultText}\n` : '';
       if (answers.length) {
         const answerLines = answers.map((item, index) => `${index} - ${item}`);
         thisResultText += answerLines.join('\n\n');
       }
 
-      setMessages((prev) => [
+      // If no text, use fallback
+      if (!thisResultText.trim()) {
+        thisResultText = "I understand your query. How else can I assist you with your hair care?";
+      }
+
+      // Remove the typing message and add the actual response with typing effect
+      setMessages(prev => prev.filter(msg => msg.id !== typingMessageId));
+      
+      const actualMessageId = Date.now() + 2;
+      setMessages(prev => [
         ...prev,
         {
-          id: Date.now() + 1,
+          id: actualMessageId,
           sender: "bot",
-          text: thisResultText,
+          text: "", // Start with empty text
+          isTyping: true,
         },
       ]);
 
-      setButtons(response.data.question_buttons || []);
+      // Start typing animation
+      typeText(thisResultText, actualMessageId, () => {
+        // After typing completes, update the message and set buttons
+        setMessages(prev => prev.map(msg => 
+          msg.id === actualMessageId 
+            ? { ...msg, isTyping: false }
+            : msg
+        ));
+        setButtons(response.data.question_buttons || []);
+      });
+
     } catch (error) {
       console.error("Error fetching initial data:", error);
+      setIsBotTyping(false);
+      
+      // Remove typing message and show error
+      setMessages(prev => {
+        const filtered = prev.filter(msg => !msg.isTyping);
+        return [
+          ...filtered,
+          {
+            id: Date.now() + 1,
+            sender: "bot",
+            text: "Sorry, I encountered an error. Please try again.",
+            isTyping: false,
+          },
+        ];
+      });
     }
   };
+
   const handleSubmit = async (text) => {
-    var thisText = null
+    if (isBotTyping) return; // Prevent new messages while bot is typing
+    
+    var thisText = null;
     if (typeof text == "string" && text.trim()){
-      thisText = text
-    }else{
-      thisText = inputText.trim()
+      thisText = text;
+    } else {
+      thisText = inputText.trim();
     }
     if (thisText == null) return;
-    const newMessage = { id: Date.now(), sender: "user", text: thisText };
+    
+    const newMessage = { 
+      id: Date.now(), 
+      sender: "user", 
+      text: thisText,
+      isTyping: false 
+    };
     setMessages((prev) => [...prev, newMessage]);
     setInputText("");
     await fetchAnswer(thisText);
@@ -174,20 +259,25 @@ const ChatbotScreen = () => {
                   style={[
                     styles.message,
                     msg.sender === "bot" ? styles.botMessage : styles.userMessage,
+                    msg.isTyping && styles.typingMessage,
                   ]}
                 >
                   <Text
                     style={[
                       styles.messageText,
                       msg.sender === "bot" ? styles.botText : styles.userText,
+                      msg.isTyping && styles.typingText,
                     ]}
                   >
                     {msg.text}
+                    {msg.isTyping && msg.sender === "bot" && (
+                      <Text style={styles.cursor}>|</Text>
+                    )}
                   </Text>
                 </View>
               ) : null
             ))}
-            {buttons.length > 0 && (
+            {buttons.length > 0 && !isBotTyping && (
               <View style={styles.buttonsContainer}>
                 {buttons.map((buttonText, index) => (
                   <TouchableOpacity
@@ -215,11 +305,16 @@ const ChatbotScreen = () => {
                 multiline
                 value={inputText}
                 onChangeText={setInputText}
+                editable={!isBotTyping}
               />
               <TouchableOpacity
-                style={styles.sendButton}
+                style={[
+                  styles.sendButton,
+                  isBotTyping && styles.disabledSendButton
+                ]}
                 onPress={handleSubmit}
                 activeOpacity={0.8}
+                disabled={isBotTyping}
               >
                 <Icon name="send" size={20} color="#fff" />
               </TouchableOpacity>
@@ -282,6 +377,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#2e7d32",
     borderBottomRightRadius: 4,
   },
+  typingMessage: {
+    backgroundColor: "#e8f5e9",
+  },
   messageText: {
     fontSize: 16,
     lineHeight: 21,
@@ -291,6 +389,14 @@ const styles = StyleSheet.create({
   },
   userText: {
     color: "#fff",
+  },
+  typingText: {
+    fontStyle: "italic",
+  },
+  cursor: {
+    color: "#2e7d32",
+    fontWeight: "bold",
+    opacity: 0.7,
   },
   inputContainer: {
     flexDirection: "row",
@@ -327,6 +433,10 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 3,
     elevation: 3,
+  },
+  disabledSendButton: {
+    backgroundColor: "#81c784",
+    opacity: 0.6,
   },
   buttonsContainer: {
     flexDirection: 'row', // Arrange buttons in a row

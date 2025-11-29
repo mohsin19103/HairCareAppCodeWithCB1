@@ -1,11 +1,16 @@
-import React from "react";
-import { View, Text, ScrollView, StyleSheet } from "react-native";
+//this is result screen 2 where actully the model gernate result 
+import React, { useState, useRef, useEffect } from "react";
+import { View, Text, ScrollView, StyleSheet, Animated } from "react-native";
 import { useRoute } from "@react-navigation/native";
 import LinearGradient from "react-native-linear-gradient";
 
 const ResultScreen = () => {
   const route = useRoute();
   const responseData = route?.params?.responseData;
+  const [displayData, setDisplayData] = useState({});
+  const [isTyping, setIsTyping] = useState(true);
+  const [currentCard, setCurrentCard] = useState("");
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   if (!responseData || !responseData.result) {
     return (
@@ -18,55 +23,201 @@ const ResultScreen = () => {
   const { result } = responseData;
   const { sections } = result;
 
-  const renderSectionItem = (item, sectionKey, index) => {
-    if (item.text && item.items) {
+  // Function to simulate typing effect
+  const typeText = (text, cardKey, onComplete) => {
+    return new Promise((resolve) => {
+      let index = 0;
+      const typingSpeed = 30; // milliseconds per character
+      
+      const typingInterval = setInterval(() => {
+        if (index <= text.length) {
+          setDisplayData(prev => ({
+            ...prev,
+            [cardKey]: text.substring(0, index)
+          }));
+          index++;
+        } else {
+          clearInterval(typingInterval);
+          if (onComplete) onComplete();
+          resolve();
+        }
+      }, typingSpeed);
+    });
+  };
+
+  // Function to format section content as text
+  const formatSectionContent = (content) => {
+    if (Array.isArray(content)) {
+      let formattedText = "";
+      content.forEach((item, index) => {
+        if (item.text && item.items) {
+          formattedText += `• ${item.text}\n`;
+          item.items.forEach((subItem) => {
+            formattedText += `   ◦ ${subItem}\n`;
+          });
+        } else if (item.text) {
+          formattedText += `• ${item.text}\n`;
+        }
+      });
+      return formattedText.trim();
+    } else if (content.text && !content.items) {
+      return content.text;
+    } else if (content.text && Array.isArray(content.items)) {
+      let formattedText = `${content.text}\n`;
+      content.items.forEach((subItem) => {
+        formattedText += `• ${subItem}\n`;
+      });
+      return formattedText.trim();
+    }
+    return "Analyzing data...";
+  };
+
+  // Initialize typing animation for all cards sequentially
+  const startSequentialTyping = async () => {
+    // Start fade animation
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 800,
+      useNativeDriver: true,
+    }).start();
+
+    // Initialize all cards with dot
+    const initialData = {
+      header: "●",
+    };
+    
+    // Initialize section cards with dots
+    Object.keys(sections).forEach(key => {
+      initialData[key] = "●";
+    });
+    
+    setDisplayData(initialData);
+
+    // Wait a bit before starting to type
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Type header card first
+    setCurrentCard("header");
+    const headerText = `Diagnosis Report\n${result.disease}\nConfidence: ${result.confidence.toFixed(2)}%`;
+    await typeText(headerText, "header");
+    await new Promise(resolve => setTimeout(resolve, 400));
+
+    // Type each section card sequentially
+    for (const sectionKey of Object.keys(sections)) {
+      setCurrentCard(sectionKey);
+      const sectionContent = formatSectionContent(sections[sectionKey]);
+      await typeText(sectionContent, sectionKey);
+      await new Promise(resolve => setTimeout(resolve, 400)); // Pause between cards
+    }
+
+    setIsTyping(false);
+  };
+
+  useEffect(() => {
+    startSequentialTyping();
+  }, [responseData]);
+
+  // Render header card content
+  const renderHeaderContent = () => {
+    const content = displayData["header"] || "●";
+    
+    if (content === "●") {
       return (
-        <View key={`${sectionKey}-${index}`} style={styles.itemContainer}>
-          <Text style={styles.sectionText}>• {item.text}</Text>
-          {item.items.map((subItem, subIndex) => (
-            <Text
-              key={`${sectionKey}-${index}-item-${subIndex}`}
-              style={styles.listItem}
-            >
-              {"   "}◦ {subItem}
-            </Text>
-          ))}
-        </View>
-      );
-    } else if (item.text) {
-      return (
-        <Text key={`${sectionKey}-${index}`} style={styles.listItem}>
-          • {item.text}
+        <Text style={[styles.diseaseName, styles.typingText]}>
+          {content}
+          {isTyping && currentCard === "header" && (
+            <Text style={styles.cursor}>|</Text>
+          )}
         </Text>
       );
     }
+
+    const lines = content.split('\n');
     return (
-      <Text key={`${sectionKey}-${index}`} style={styles.errorText}>
-        Invalid item format
-      </Text>
+      <View>
+        <Text style={styles.headerTitle}>
+          {lines[0] || "Diagnosis Report"}
+          {isTyping && currentCard === "header" && lines.length <= 1 && (
+            <Text style={styles.cursor}>|</Text>
+          )}
+        </Text>
+        
+        <Text style={styles.diseaseName}>
+          {lines[1] || result.disease}
+          {isTyping && currentCard === "header" && lines.length <= 2 && (
+            <Text style={styles.cursor}>|</Text>
+          )}
+        </Text>
+
+        <View style={styles.confidenceContainer}>
+          <Text style={styles.confidenceText}>
+            {lines[2] || `Confidence: ${result.confidence.toFixed(2)}%`}
+            {isTyping && currentCard === "header" && lines.length <= 3 && (
+              <Text style={styles.cursor}>|</Text>
+            )}
+          </Text>
+          <View style={styles.progressBar}>
+            <View
+              style={[
+                styles.progressFill,
+                { 
+                  width: `${result.confidence}%`,
+                  opacity: isTyping && currentCard === "header" ? 0.7 : 1
+                },
+              ]}
+            />
+          </View>
+        </View>
+      </View>
     );
   };
 
-  const renderSectionContent = (content, sectionKey) => {
-    if (Array.isArray(content)) {
-      return content.map((item, index) =>
-        renderSectionItem(item, sectionKey, index)
-      );
-    } else if (content.text && !content.items) {
-      return <Text style={styles.sectionText}>{content.text}</Text>;
-    } else if (content.text && Array.isArray(content.items)) {
+  // Render section card content
+  const renderSectionContent = (sectionKey) => {
+    const content = displayData[sectionKey] || "●";
+    
+    if (content === "●") {
       return (
-        <View style={styles.itemContainer}>
-          <Text style={styles.sectionText}>{content.text}</Text>
-          {content.items.map((subItem, index) => (
-            <Text key={`${sectionKey}-item-${index}`} style={styles.listItem}>
-              • {subItem}
-            </Text>
-          ))}
-        </View>
+        <Text style={[styles.sectionText, styles.typingText]}>
+          {content}
+          {isTyping && currentCard === sectionKey && (
+            <Text style={styles.cursor}>|</Text>
+          )}
+        </Text>
       );
     }
-    return <Text style={styles.errorText}>Invalid section format</Text>;
+
+    const lines = content.split('\n');
+    return lines.map((line, index) => {
+      if (line.startsWith('   ◦ ')) {
+        return (
+          <Text key={index} style={styles.listItem}>
+            {line}
+            {isTyping && currentCard === sectionKey && index === lines.length - 1 && (
+              <Text style={styles.cursor}>|</Text>
+            )}
+          </Text>
+        );
+      } else if (line.startsWith('• ')) {
+        return (
+          <Text key={index} style={styles.sectionText}>
+            {line}
+            {isTyping && currentCard === sectionKey && index === lines.length - 1 && (
+              <Text style={styles.cursor}>|</Text>
+            )}
+          </Text>
+        );
+      } else {
+        return (
+          <Text key={index} style={styles.sectionText}>
+            {line}
+            {isTyping && currentCard === sectionKey && index === lines.length - 1 && (
+              <Text style={styles.cursor}>|</Text>
+            )}
+          </Text>
+        );
+      }
+    });
   };
 
   return (
@@ -80,36 +231,38 @@ const ResultScreen = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.headerCard}>
-          <Text style={styles.headerTitle}>Diagnosis Report</Text>
-          <Text style={styles.diseaseName}>{result.disease}</Text>
+        {/* Header Card */}
+        <Animated.View style={[styles.headerCard, { opacity: fadeAnim }]}>
+          {renderHeaderContent()}
+        </Animated.View>
 
-          {/* Confidence Bar */}
-          <View style={styles.confidenceContainer}>
-            <Text style={styles.confidenceText}>
-              Confidence: {result.confidence.toFixed(2)}%
-            </Text>
-            <View style={styles.progressBar}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${result.confidence}%` },
-                ]}
-              />
-            </View>
-          </View>
-        </View>
-
-        {/* Sections */}
+        {/* Section Cards */}
         {Object.keys(sections).map((sectionKey) => (
-          <View key={sectionKey} style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>{sectionKey}</Text>
-            {renderSectionContent(sections[sectionKey], sectionKey)}
-          </View>
+          <Animated.View 
+            key={sectionKey} 
+            style={[
+              styles.sectionCard, 
+              { 
+                opacity: fadeAnim,
+                // Slightly dim cards that haven't been typed yet
+                opacity: !displayData[sectionKey] || displayData[sectionKey] === "●" ? 0.7 : 1
+              }
+            ]}
+          >
+            <Text style={styles.sectionTitle}>
+              {sectionKey}
+              {isTyping && currentCard === sectionKey && (
+                <Text style={styles.cursor}>|</Text>
+              )}
+            </Text>
+            {renderSectionContent(sectionKey)}
+          </Animated.View>
         ))}
 
-        <Text style={styles.footerText}>AI-powered Hair Analysis • v1.0</Text>
+        <Text style={styles.footerText}>
+          AI-powered Hair Analysis • v1.0
+          {isTyping && <Text style={styles.cursor}>|</Text>}
+        </Text>
       </ScrollView>
     </LinearGradient>
   );
@@ -214,6 +367,17 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
 
+  // Typing effects
+  typingText: {
+    fontStyle: "italic",
+    color: "#81c784",
+  },
+  cursor: {
+    color: "#00b894",
+    fontWeight: "bold",
+    opacity: 0.7,
+  },
+
   // Footer
   footerText: {
     textAlign: "center",
@@ -224,4 +388,3 @@ const styles = StyleSheet.create({
 });
 
 export default ResultScreen;
- 
