@@ -34,7 +34,10 @@ const HistoryDetail = () => {
   const [isTyping, setIsTyping] = useState(true);
   const [currentCard, setCurrentCard] = useState("header");
   const [visibleCards, setVisibleCards] = useState(["header"]);
+  const [cardHeights, setCardHeights] = useState({});
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scrollViewRef = useRef(null);
+  const cardPositions = useRef({});
 
   // Sample AI-generated results data
   const aiResults = {
@@ -84,6 +87,43 @@ const HistoryDetail = () => {
         ]
       }
     }
+  };
+
+  // Function to scroll to a specific card
+  const scrollToCard = (cardKey) => {
+    if (scrollViewRef.current && cardPositions.current[cardKey]) {
+      const yOffset = cardPositions.current[cardKey];
+      scrollViewRef.current.scrollTo({
+        y: yOffset - 100, // Offset to show some context above
+        animated: true
+      });
+    }
+  };
+
+  // Function to calculate card positions
+  const calculateCardPositions = () => {
+    let currentY = 0;
+    const positions = {};
+    
+    // Image section height (approximate)
+    positions.image = currentY;
+    currentY += 320; // image section approximate height
+    
+    // Results title
+    positions.resultsTitle = currentY;
+    currentY += 50;
+    
+    // Header card
+    positions.header = currentY;
+    currentY += cardHeights.header || 150;
+    
+    // Section cards
+    Object.keys(aiResults.sections).forEach(sectionKey => {
+      positions[sectionKey] = currentY;
+      currentY += cardHeights[sectionKey] || 200;
+    });
+    
+    cardPositions.current = positions;
   };
 
   // Function to simulate typing effect
@@ -171,6 +211,12 @@ const HistoryDetail = () => {
 
       await new Promise(resolve => setTimeout(resolve, 200));
 
+      // Recalculate positions and scroll to current card
+      setTimeout(() => {
+        calculateCardPositions();
+        scrollToCard(sectionKey);
+      }, 100);
+
       const sectionContent = formatSectionContent(aiResults.sections[sectionKey]);
       await typeText(sectionContent, sectionKey);
       
@@ -185,6 +231,20 @@ const HistoryDetail = () => {
   useEffect(() => {
     startSequentialTyping();
   }, []);
+
+  // Update card positions when heights change
+  useEffect(() => {
+    calculateCardPositions();
+  }, [cardHeights]);
+
+  // Function to measure card height
+  const onCardLayout = (cardKey, event) => {
+    const { height } = event.nativeEvent.layout;
+    setCardHeights(prev => ({
+      ...prev,
+      [cardKey]: height
+    }));
+  };
 
   // Render header card content
   const renderHeaderContent = () => {
@@ -307,6 +367,7 @@ const HistoryDetail = () => {
         </View>
 
         <ScrollView
+          ref={scrollViewRef}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
@@ -318,7 +379,7 @@ const HistoryDetail = () => {
                 source={{ uri: historyItem.image }}
                 style={styles.analysisImage}
                 resizeMode="cover"
-                defaultSource={require('../assets/female.png')} // Add a placeholder image
+                defaultSource={require('../assets/female.png')}
               />
               <View style={styles.imageOverlay}>
                 <Text style={styles.imageText}>{historyItem.analysisNo}</Text>
@@ -340,7 +401,10 @@ const HistoryDetail = () => {
             
             {/* Header Card */}
             {visibleCards.includes("header") && (
-              <Animated.View style={[styles.headerCard, { opacity: fadeAnim }]}>
+              <Animated.View 
+                style={[styles.headerCard, { opacity: fadeAnim }]}
+                onLayout={(event) => onCardLayout("header", event)}
+              >
                 {renderHeaderContent()}
               </Animated.View>
             )}
@@ -351,6 +415,7 @@ const HistoryDetail = () => {
                 <Animated.View 
                   key={sectionKey} 
                   style={[styles.sectionCard, { opacity: fadeAnim }]}
+                  onLayout={(event) => onCardLayout(sectionKey, event)}
                 >
                   <Text style={styles.sectionTitle}>
                     {sectionKey}
@@ -390,6 +455,8 @@ const HistoryDetail = () => {
     </SafeAreaView>
   );
 };
+
+// ... (styles remain exactly the same as in your original code)
 
 const styles = StyleSheet.create({
   safeArea: {
