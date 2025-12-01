@@ -45,6 +45,7 @@ const FamilyHistoryScreen = () => {
 
 const confirmHandler = async () => {
   try {
+      console.log("Data being sent to backend:", JSON.stringify(userData));
     const response = await fetch(`${BASE_URL}/user/UserPrimaryDetails`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -53,6 +54,7 @@ const confirmHandler = async () => {
 
     const text = await response.text();
     const data = text ? JSON.parse(text) : {};
+    console.log("Response from backend:", data);
 
     if (response.ok) {
       Toast.show({
@@ -81,6 +83,7 @@ const confirmHandler = async () => {
       visibilityTime: 3000,
     });
   }
+  
 };
 
 
