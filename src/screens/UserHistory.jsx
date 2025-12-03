@@ -204,7 +204,8 @@ const UserHistory = () => {
             <Text style={styles.navTextActive}>Hair History</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.navItem}>
+          <TouchableOpacity style={styles.navItem}
+          onPress={()=> navigation.navigate("ProductScreen")}>
             <Ionicons name="flask-outline" size={26} color="#4f4f4f" />
             <Text style={styles.navText}>Products</Text>
           </TouchableOpacity>

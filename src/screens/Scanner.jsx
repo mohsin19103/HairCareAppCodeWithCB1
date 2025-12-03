@@ -107,7 +107,8 @@ const Scanner = () => {
             <Text style={styles.navText}>Hair History</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.navItem} activeOpacity={0.8}>
+          <TouchableOpacity style={styles.navItem} activeOpacity={0.8}
+           onPress={()=> navigation.navigate("ProductScreen")}>
             <Ionicons name="flask-outline" size={26} color="#4f4f4f" />
             <Text style={styles.navText}>Products</Text>
           </TouchableOpacity>

@@ -11,51 +11,64 @@ const ResultsScreen = () => {
   const spinValue = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [showError, setShowError] = useState(false);
 
- const getResult = async () => {
-  if (photos.length === 0) return;
+  const getResult = async () => {
+    if (photos.length === 0) return;
 
-  try {
-    const formData = new FormData();
-    photos.forEach((image, index) => {
-      formData.append('images', {
-        uri: `file://${image.path}`,
-        type: 'image/jpeg',
-        name: `image_${image.view}_${index}.jpg`,
+    try {
+      const formData = new FormData();
+      photos.forEach((image, index) => {
+        formData.append('images', {
+          uri: `file://${image.path}`,
+          type: 'image/jpeg',
+          name: `image_${image.view}_${index}.jpg`,
+        });
+        formData.append(`view_${index}`, image.view);
       });
-      formData.append(`view_${index}`, image.view);
-    });
 
-    console.log('📸 Sending images to API...');
-    console.log('Number of photos:', photos.length);
-    photos.forEach((photo, index) => {
-      console.log(`Photo ${index + 1}:`, photo);
-    });
+      console.log('📸 Sending images to API...');
+      console.log('Number of photos:', photos.length);
+      photos.forEach((photo, index) => {
+        console.log(`Photo ${index + 1}:`, photo);
+      });
 
-    const response = await fetch(`${config.AI_API_URL}/predict/image`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'multipart/form-data' },
-      body: formData,
-    });
+      const response = await fetch(`${config.AI_API_URL}/predict/image`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'multipart/form-data' },
+        body: formData,
+      });
 
-    const result = await response.json();
-    
-    // ✅ YAHAN PAR RESULT CONSOLE PE PRINT HOGA
-    console.log('🎯 FULL API RESPONSE:', JSON.stringify(result, null, 2));
-    console.log('🔍 Disease:', result.result?.disease);
-    console.log('📊 Confidence:', result.result?.confidence);
-    console.log('📑 Sections:', Object.keys(result.result?.sections || {}));
+      const result = await response.json();
+      
+      console.log('🎯 FULL API RESPONSE:', JSON.stringify(result, null, 2));
+      
+      // Check for error in response
+      if (result.error) {
+        setError(result.error);
+        setShowError(true);
+        setLoading(false);
+        return;
+      }
+      
+      console.log('🔍 Disease:', result.result?.disease);
+      console.log('📊 Confidence:', result.result?.confidence);
+      console.log('📑 Sections:', Object.keys(result.result?.sections || {}));
 
-    if (result.result) {
-      let responseData = result;
-      navigation.navigate('ResultScreen', { responseData });
-    } else {
-      throw new Error(result.message || 'Upload failed');
+      if (result.result) {
+        let responseData = result;
+        navigation.navigate('ResultScreen', { responseData });
+      } else {
+        throw new Error(result.message || 'Upload failed');
+      }
+    } catch (error) {
+      console.log('❌ Upload Error:', error);
+      setError('An error occurred while processing your request. Please try again.');
+      setShowError(true);
+      setLoading(false);
     }
-  } catch (error) {
-    console.log('❌ Upload Error:', error);
-  }
-};
+  };
 
   useEffect(() => {
     // Start animations
@@ -87,26 +100,54 @@ const ResultsScreen = () => {
     outputRange: ['0deg', '360deg'],
   });
 
+  // Handle back to camera
+  const handleBackToCamera = () => {
+    navigation.goBack();
+  };
+
   return (
     <LinearGradient colors={["#e9fff3", "#ffffff"]} style={styles.container}>
       <Animated.View style={[styles.card, { opacity: fadeAnim }]}>
-        <Animated.View style={[styles.loader, { transform: [{ rotate: spin }] }]}>
-          <ActivityIndicator size="large" color="#00b894" />
-        </Animated.View>
+        
+        {showError ? (
+          // Error State UI - SHOWS BACK TO CAMERA BUTTON
+          <>
+            <View style={styles.errorIconContainer}>
+              <Text style={styles.errorIcon}>⚠️</Text>
+            </View>
+            
+            <Text style={styles.errorTitle}>Invalid Image</Text>
+            
+            <Text style={styles.errorMessage}>
+              {error || "Found Irrelevant Objects in the photo, please do send the photo of your hairs only"}
+            </Text>
+            
+            {/* BACK TO CAMERA BUTTON - ONLY SHOWS IN ERROR STATE */}
+            <TouchableOpacity
+              style={styles.backToCameraButton}
+              onPress={handleBackToCamera}
+            >
+              <Text style={styles.backToCameraButtonText}>Back to Camera</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          // Loading State UI - NO BACK TO CAMERA BUTTON
+          <>
+            <Animated.View style={[styles.loader, { transform: [{ rotate: spin }] }]}>
+              <ActivityIndicator size="large" color="#00b894" />
+            </Animated.View>
 
-        <Text style={styles.title}>
-          {loading ? "Analyzing..." : "Generating Results..."}
-        </Text>
-        <Text style={styles.subtitle}>
-          Please wait while we process your {photos.length} image(s).
-        </Text>
+            <Text style={styles.title}>
+              {loading ? "Analyzing..." : "Generating Results..."}
+            </Text>
+            <Text style={styles.subtitle}>
+              Please wait while we process your {photos.length} image(s).
+            </Text>
 
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.backText}>Back to Camera</Text>
-        </TouchableOpacity>
+            {/* NO BUTTON HERE - User can't go back during processing */}
+          </>
+        )}
+        
       </Animated.View>
     </LinearGradient>
   );
@@ -144,15 +185,43 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 40,
   },
-  backButton: {
+  errorIconContainer: {
+    marginBottom: 20,
+  },
+  errorIcon: {
+    fontSize: 60,
+  },
+  errorTitle: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#ff6b6b",
+    marginBottom: 15,
+    textAlign: "center",
+  },
+  errorMessage: {
+    fontSize: 16,
+    color: "#555",
+    textAlign: "center",
+    marginBottom: 40,
+    lineHeight: 22,
+    paddingHorizontal: 10,
+  },
+  backToCameraButton: {
     backgroundColor: "#00b894",
     borderRadius: 25,
-    paddingVertical: 12,
-    paddingHorizontal: 35,
+    paddingVertical: 15,
+    paddingHorizontal: 40,
+    width: "100%",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  backText: {
+  backToCameraButtonText: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "bold",
   },
 });

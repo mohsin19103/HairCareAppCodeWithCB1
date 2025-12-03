@@ -20,8 +20,9 @@ import * as ImagePicker from "react-native-image-picker";
 import axios from "axios";
 import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
 import { BlurView } from "@react-native-community/blur";
+import { BASE_URL } from "../config/Api";
 
-const API_BASE_URL = "http://172.20.10.4:8080";
+const API_BASE_URL = BASE_URL ;
 
 const ProfileScreen = () => {
   const navigation = useNavigation();

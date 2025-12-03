@@ -17,9 +17,10 @@ import FA from 'react-native-vector-icons/FontAwesome';
 import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import { BASE_URL } from '../config/Api';
 
 const { height } = Dimensions.get('window');
-const API_BASE_URL = 'http://172.20.10.4:8080';
+const API_BASE_URL = BASE_URL;
 
 const Feedback = () => {
   const navigation = useNavigation();

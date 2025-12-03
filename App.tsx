@@ -21,6 +21,7 @@ import ProfileScreen from "./src/screens/ProfileScreen";
 import ResultScreen from "./src/screens/ResultScreen";
 import UserHistory from "./src/screens/UserHistory";
 import HistoryDetail from "./src/screens/HistoryDetail";
+import ProductScreen from "./src/screens/ProductScreen";
 const Stack = createNativeStackNavigator();
 
 const App = () => {
@@ -75,6 +76,8 @@ const App = () => {
           <Stack.Screen name="profileScreen" component={ProfileScreen} />
            <Stack.Screen name="UserHistory" component={UserHistory} />
            <Stack.Screen name="HistoryDetail" component={HistoryDetail} />
+           <Stack.Screen name="ProductScreen" component={ProductScreen} />
+
           <Stack.Screen
             name="ResultScreen"
             component={ResultScreen}
