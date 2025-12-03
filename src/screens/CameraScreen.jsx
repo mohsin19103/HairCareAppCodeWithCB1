@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { Camera, useCameraDevice } from "react-native-vision-camera";
 import { useNavigation } from "@react-navigation/native";
+import { launchImageLibrary } from 'react-native-image-picker';
 
 const { width, height } = Dimensions.get("window");
 
@@ -54,6 +55,9 @@ const CameraScreen = () => {
       await PermissionsAndroid.request(
         PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE
       );
+      await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE
+      );
     }
 
     if (
@@ -78,6 +82,60 @@ const CameraScreen = () => {
         console.error("Error taking photo:", error);
       }
     }
+  };
+
+  const openGalleryForCurrentView = async () => {
+    try {
+      const options = {
+        mediaType: 'photo',
+        includeBase64: false,
+        maxHeight: 800,
+        maxWidth: 800,
+        quality: 0.8,
+      };
+
+      launchImageLibrary(options, (response) => {
+        if (response.didCancel) {
+          console.log('User cancelled image picker');
+        } else if (response.errorCode) {
+          console.log('ImagePicker Error: ', response.errorMessage);
+        } else if (response.assets && response.assets.length > 0) {
+          const selectedAsset = response.assets[0];
+          const selectedPhoto = {
+            view: currentView,
+            path: selectedAsset.uri,
+          };
+          
+          setLastCapturedPhoto(selectedAsset.uri);
+          setIsCameraActive(false);
+          
+          // Auto-confirm the gallery image after a short delay
+          setTimeout(() => {
+            confirmPhotoFromGallery(selectedPhoto);
+          }, 100);
+        }
+      });
+    } catch (error) {
+      console.error('Error opening gallery:', error);
+    }
+  };
+
+  const confirmPhotoFromGallery = (selectedPhoto) => {
+    setPhotos((prevPhotos) => {
+      const newPhotos = [...prevPhotos, selectedPhoto];
+      if (newPhotos.length === 2) {
+        setShowAllPhotos(true);
+      } else {
+        const viewsOrder = ["front", "back"];
+        const currentIndex = viewsOrder.indexOf(currentView);
+        if (currentIndex < viewsOrder.length - 1) {
+          setCurrentView(viewsOrder[currentIndex + 1]);
+          setIsCameraActive(true);
+        }
+      }
+      return newPhotos;
+    });
+    setLastCapturedPhoto(null);
   };
 
   const confirmPhoto = () => {
@@ -130,7 +188,7 @@ const CameraScreen = () => {
             {photos.map((photo, index) => (
               <View key={index} style={styles.photoCard}>
                 <Image
-                  source={{ uri: "file://" + photo.path }}
+                  source={{ uri: photo.path }}
                   style={styles.capturedImage}
                   resizeMode="cover"
                 />
@@ -172,9 +230,21 @@ const CameraScreen = () => {
             />
           </View>
 
-          <TouchableOpacity style={styles.captureButton} onPress={takePhoto}>
-            <View style={styles.captureButtonInner} />
-          </TouchableOpacity>
+          <View style={styles.bottomButtonsContainer}>
+            <TouchableOpacity 
+              style={styles.galleryButton} 
+              onPress={openGalleryForCurrentView}
+            >
+              <Text style={styles.galleryButtonText}>📁 Gallery</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.captureButton} onPress={takePhoto}>
+              <View style={styles.captureButtonInner} />
+            </TouchableOpacity>
+            
+            {/* Empty view for balance */}
+            <View style={styles.emptyView} />
+          </View>
         </View>
       ) : (
         /* Preview View */
@@ -182,7 +252,7 @@ const CameraScreen = () => {
           <View style={styles.guideContainer}>
             <Text style={styles.viewTitle}>{viewTitles[currentView]}</Text>
             <Image
-              source={{ uri: "file://" + lastCapturedPhoto }}
+              source={{ uri: lastCapturedPhoto }}
               style={styles.previewImage}
               resizeMode="contain"
             />
@@ -233,6 +303,29 @@ const styles = StyleSheet.create({
   },
   cameraView: { flex: 1 },
 
+  bottomButtonsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 30,
+    marginBottom: 30,
+  },
+  
+  galleryButton: {
+    backgroundColor: "#e6f5ec",
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 25,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#0b8a46",
+  },
+  galleryButtonText: {
+    color: "#0b8a46",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  
   captureButton: {
     width: 78,
     height: 78,
@@ -242,10 +335,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "rgba(11,138,70,0.1)",
-    alignSelf: "center",
-    marginBottom: 30,
   },
   captureButtonInner: { width: 58, height: 58, borderRadius: 29, backgroundColor: "#0b8a46" },
+  
+  emptyView: { width: 80 }, // For balance
 
   previewContainer: { flex: 1, justifyContent: "space-between" },
   previewImage: {
