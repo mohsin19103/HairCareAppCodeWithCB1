@@ -76,7 +76,11 @@ const CameraScreen = () => {
     if (cameraRef.current) {
       try {
         const photo = await cameraRef.current.takePhoto();
-        setLastCapturedPhoto(photo.path);
+        console.log("Camera photo path:", photo.path); // Debug log
+        
+        // Add "file://" prefix for camera images
+        const photoPath = `file://${photo.path}`;
+        setLastCapturedPhoto(photoPath);
         setIsCameraActive(false);
       } catch (error) {
         console.error("Error taking photo:", error);
@@ -106,6 +110,7 @@ const CameraScreen = () => {
             path: selectedAsset.uri,
           };
           
+          console.log("Gallery photo path:", selectedAsset.uri); // Debug log
           setLastCapturedPhoto(selectedAsset.uri);
           setIsCameraActive(false);
           
@@ -139,8 +144,17 @@ const CameraScreen = () => {
   };
 
   const confirmPhoto = () => {
+    if (!lastCapturedPhoto) return;
+    
+    const photoToAdd = { 
+      view: currentView, 
+      path: lastCapturedPhoto 
+    };
+    
+    console.log("Confirming photo:", photoToAdd); // Debug log
+    
     setPhotos((prevPhotos) => {
-      const newPhotos = [...prevPhotos, { view: currentView, path: lastCapturedPhoto }];
+      const newPhotos = [...prevPhotos, photoToAdd];
       if (newPhotos.length === 2) {
         setShowAllPhotos(true);
       } else {
@@ -247,15 +261,17 @@ const CameraScreen = () => {
           </View>
         </View>
       ) : (
-        /* Preview View */
+        /* Preview View - Show captured/selected image */
         <View style={styles.previewContainer}>
           <View style={styles.guideContainer}>
             <Text style={styles.viewTitle}>{viewTitles[currentView]}</Text>
-            <Image
-              source={{ uri: lastCapturedPhoto }}
-              style={styles.previewImage}
-              resizeMode="contain"
-            />
+            {lastCapturedPhoto && (
+              <Image
+                source={{ uri: lastCapturedPhoto }}
+                style={styles.previewImage}
+                resizeMode="contain"
+              />
+            )}
           </View>
 
           <View style={styles.previewButtons}>
