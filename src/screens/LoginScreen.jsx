@@ -352,5 +352,3 @@ const styles = StyleSheet.create({
   },
   createAccountText: { color: '#2e7d32', fontSize: 15, fontWeight: '500' },
 });
-
-
