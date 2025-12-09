@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,11 +8,15 @@ import {
   Dimensions,
   SafeAreaView,
   TouchableOpacity,
-  Animated,
+  Alert,
+  ActivityIndicator,
 } from "react-native";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import LinearGradient from "react-native-linear-gradient";
 import Ionicons from "react-native-vector-icons/Ionicons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
+import { BASE_URL } from "../config/Api";
 
 const { width, height } = Dimensions.get("window");
 
@@ -20,333 +24,175 @@ const HistoryDetail = () => {
   const route = useRoute();
   const navigation = useNavigation();
   
-  // Safe access to route params with default values
-  const historyItem = route.params?.historyItem || {
-    id: 1,
-    date: "2024-01-15",
-    analysisNo: "HA-001",
-    image: "../assets/female.png",
-    condition: "Healthy",
-    confidence: "92%",
+  // Get the full analysis data from route params
+  const analysisData = route.params?.analysisData || {
+    id: 24,
+    disease: "Hair Thinning",
+    confidence: 98.29980134963989,
+    sections: {
+      "Definition": { "text": "Hair thinning refers to minor to moderate hair loss that gives the appearance of reduced hair density without complete baldness." },
+      "Causes": [{ "text": "Genetics (Androgenetic Alopecia)" }],
+      "Solutions": [{ "text": "Treat nutritional deficiencies" }],
+      "Recommendations": [{ "text": "Eat a balanced diet rich in iron, biotin, omega-3, zinc" }],
+      "Preventive Tips": [{ "text": "Avoid brushing wet hair" }]
+    },
+    user_id: 4089,
+    created_at: "2025-12-08T22:42:49.8094"
   };
   
-  const [displayData, setDisplayData] = useState({});
-  const [isTyping, setIsTyping] = useState(true);
-  const [currentCard, setCurrentCard] = useState("header");
-  const [visibleCards, setVisibleCards] = useState(["header"]);
-  const [cardHeights, setCardHeights] = useState({});
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scrollViewRef = useRef(null);
-  const cardPositions = useRef({});
+  const historyItem = route.params?.historyItem || {
+    id: 24,
+    analysisNo: "HA-024",
+    image: "https://via.placeholder.com/100/2e7d32/ffffff?text=Hair+1",
+    condition: analysisData.disease || "Unknown",
+    confidence: analysisData.confidence ? `${Math.round(analysisData.confidence)}%` : "N/A",
+  };
+  
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  // Sample AI-generated results data
-  const aiResults = {
-    disease: "Androgenetic Alopecia",
-    confidence: 92.5,
-    sections: {
-      "Diagnosis": {
-        text: "Pattern hair loss consistent with androgenetic alopecia",
-        items: [
-          "Hamilton-Norwood Scale: Stage III",
-          "Miniaturization of hair follicles observed",
-          "Progressive hair thinning in crown area"
-        ]
-      },
-      "Root Cause Analysis": {
-        text: "Primary contributing factors identified",
-        items: [
-          "Genetic predisposition to DHT sensitivity",
-          "Hormonal imbalance detected",
-          "Moderate scalp inflammation present"
-        ]
-      },
-      "Treatment Recommendations": [
-        {
-          text: "Medical Interventions",
-          items: [
-            "Topical Minoxidil 5% solution twice daily",
-            "Finasteride 1mg daily (consult dermatologist)",
-            "Low-level laser therapy 3 times weekly"
+  // Get JWT token from AsyncStorage
+  const getAuthToken = async () => {
+    try {
+      const token = await AsyncStorage.getItem('userToken') || 
+                    await AsyncStorage.getItem('token') || 
+                    await AsyncStorage.getItem('jwtToken');
+      return token;
+    } catch (error) {
+      console.error("Error getting auth token:", error);
+      return null;
+    }
+  };
+
+  // Delete analysis function
+  const deleteAnalysis = async () => {
+    try {
+      setIsDeleting(true);
+      const token = await getAuthToken();
+      
+      if (!token) {
+        Alert.alert(
+          "Authentication Required",
+          "Please login to delete analysis",
+          [{ text: "OK" }]
+        );
+        setIsDeleting(false);
+        return;
+      }
+
+      const DELETE_URL = `${BASE_URL}/api/ai-responses/${analysisData.id}`;
+      console.log("Deleting analysis:", DELETE_URL);
+
+      const response = await axios.delete(DELETE_URL, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      console.log("Delete response:", response.status);
+
+      if (response.status === 200 || response.status === 204) {
+        // Show success message
+        Alert.alert(
+          "Success",
+          "Analysis deleted successfully!",
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                // Navigate back to history screen
+                navigation.goBack();
+                // You might want to pass a callback to refresh the list
+                if (route.params?.onDelete) {
+                  route.params.onDelete(analysisData.id);
+                }
+              }
+            }
           ]
+        );
+      } else {
+        throw new Error("Failed to delete analysis");
+      }
+    } catch (error) {
+      console.error("Error deleting analysis:", error);
+      
+      let errorMessage = "Failed to delete analysis. Please try again.";
+      
+      if (error.response) {
+        switch (error.response.status) {
+          case 401:
+          case 403:
+            errorMessage = "Session expired. Please login again.";
+            break;
+          case 404:
+            errorMessage = "Analysis not found. It may have already been deleted.";
+            break;
+          case 500:
+            errorMessage = "Server error. Please try again later.";
+            break;
+        }
+      }
+      
+      Alert.alert("Error", errorMessage, [{ text: "OK" }]);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Show delete confirmation modal
+  const confirmDelete = () => {
+    Alert.alert(
+      "Delete Analysis",
+      `Are you sure you want to delete this analysis for "${analysisData.disease}"?\n\nThis action cannot be undone.`,
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
         },
         {
-          text: "Lifestyle Changes",
-          items: [
-            "Balanced diet rich in protein and iron",
-            "Reduce stress through meditation/yoga",
-            "Improve sleep quality (7-8 hours nightly)"
-          ]
+          text: "Delete",
+          style: "destructive",
+          onPress: deleteAnalysis
         }
-      ],
-      "Expected Timeline": {
-        text: "Treatment progress expectations",
-        items: [
-          "Month 1-3: Reduced hair shedding",
-          "Month 4-6: Visible regrowth in affected areas",
-          "Month 7-12: Significant improvement in density"
-        ]
-      }
-    }
-  };
-
-  // Function to scroll to a specific card
-  const scrollToCard = (cardKey) => {
-    if (scrollViewRef.current && cardPositions.current[cardKey]) {
-      const yOffset = cardPositions.current[cardKey];
-      scrollViewRef.current.scrollTo({
-        y: yOffset - 100, // Offset to show some context above
-        animated: true
-      });
-    }
-  };
-
-  // Function to calculate card positions
-  const calculateCardPositions = () => {
-    let currentY = 0;
-    const positions = {};
-    
-    // Image section height (approximate)
-    positions.image = currentY;
-    currentY += 320; // image section approximate height
-    
-    // Results title
-    positions.resultsTitle = currentY;
-    currentY += 50;
-    
-    // Header card
-    positions.header = currentY;
-    currentY += cardHeights.header || 150;
-    
-    // Section cards
-    Object.keys(aiResults.sections).forEach(sectionKey => {
-      positions[sectionKey] = currentY;
-      currentY += cardHeights[sectionKey] || 200;
-    });
-    
-    cardPositions.current = positions;
-  };
-
-  // Function to simulate typing effect
-  const typeText = (text, cardKey, onComplete) => {
-    return new Promise((resolve) => {
-      let index = 0;
-      const typingSpeed = 30;
-      
-      const typingInterval = setInterval(() => {
-        if (index <= text.length) {
-          setDisplayData(prev => ({
-            ...prev,
-            [cardKey]: text.substring(0, index)
-          }));
-          index++;
-        } else {
-          clearInterval(typingInterval);
-          if (onComplete) onComplete();
-          resolve();
-        }
-      }, typingSpeed);
-    });
+      ]
+    );
   };
 
   // Function to format section content as text
   const formatSectionContent = (content) => {
+    if (!content) return "No information available";
+    
     if (Array.isArray(content)) {
-      let formattedText = "";
-      content.forEach((item, index) => {
-        if (item.text && item.items) {
-          formattedText += `• ${item.text}\n`;
-          item.items.forEach((subItem) => {
-            formattedText += `   ◦ ${subItem}\n`;
-          });
-        } else if (item.text) {
-          formattedText += `• ${item.text}\n`;
+      return content.map((item, index) => {
+        if (typeof item === 'string') {
+          return <Text key={index} style={styles.listItem}>• {item}</Text>;
+        } else if (item && typeof item === 'object' && item.text) {
+          return <Text key={index} style={styles.listItem}>• {item.text}</Text>;
         }
+        return null;
       });
-      return formattedText.trim();
-    } else if (content.text && !content.items) {
-      return content.text;
-    } else if (content.text && Array.isArray(content.items)) {
-      let formattedText = `${content.text}\n`;
-      content.items.forEach((subItem) => {
-        formattedText += `• ${subItem}\n`;
+    } else if (content && typeof content === 'object' && content.text) {
+      return <Text style={styles.sectionText}>{content.text}</Text>;
+    }
+    
+    return <Text style={styles.sectionText}>Analyzing data...</Text>;
+  };
+
+  // Format date for display
+  const formatDate = (dateString) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
       });
-      return formattedText.trim();
+    } catch {
+      return "Unknown date";
     }
-    return "Analyzing data...";
-  };
-
-  // Initialize typing animation
-  const startSequentialTyping = async () => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 800,
-      useNativeDriver: true,
-    }).start();
-
-    // Initialize header with dot
-    setDisplayData({
-      header: "●"
-    });
-
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    // Type header card first
-    setCurrentCard("header");
-    const headerText = `Analysis Report\n${aiResults.disease}\nConfidence: ${aiResults.confidence.toFixed(2)}%`;
-    await typeText(headerText, "header");
-    await new Promise(resolve => setTimeout(resolve, 400));
-
-    // Type each section card sequentially
-    const sectionKeys = Object.keys(aiResults.sections);
-    for (let i = 0; i < sectionKeys.length; i++) {
-      const sectionKey = sectionKeys[i];
-      
-      setVisibleCards(prev => [...prev, sectionKey]);
-      setCurrentCard(sectionKey);
-      
-      setDisplayData(prev => ({
-        ...prev,
-        [sectionKey]: "●"
-      }));
-
-      await new Promise(resolve => setTimeout(resolve, 200));
-
-      // Recalculate positions and scroll to current card
-      setTimeout(() => {
-        calculateCardPositions();
-        scrollToCard(sectionKey);
-      }, 100);
-
-      const sectionContent = formatSectionContent(aiResults.sections[sectionKey]);
-      await typeText(sectionContent, sectionKey);
-      
-      if (i < sectionKeys.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 400));
-      }
-    }
-
-    setIsTyping(false);
-  };
-
-  useEffect(() => {
-    startSequentialTyping();
-  }, []);
-
-  // Update card positions when heights change
-  useEffect(() => {
-    calculateCardPositions();
-  }, [cardHeights]);
-
-  // Function to measure card height
-  const onCardLayout = (cardKey, event) => {
-    const { height } = event.nativeEvent.layout;
-    setCardHeights(prev => ({
-      ...prev,
-      [cardKey]: height
-    }));
-  };
-
-  // Render header card content
-  const renderHeaderContent = () => {
-    const content = displayData["header"] || "●";
-    
-    if (content === "●") {
-      return (
-        <Text style={[styles.diseaseName, styles.typingText]}>
-          {content}
-          {isTyping && currentCard === "header" && (
-            <Text style={styles.cursor}>|</Text>
-          )}
-        </Text>
-      );
-    }
-
-    const lines = content.split('\n');
-    return (
-      <View>
-        <Text style={styles.headerTitle}>
-          {lines[0] || "Analysis Report"}
-          {isTyping && currentCard === "header" && lines.length <= 1 && (
-            <Text style={styles.cursor}>|</Text>
-          )}
-        </Text>
-        
-        <Text style={styles.diseaseName}>
-          {lines[1] || aiResults.disease}
-          {isTyping && currentCard === "header" && lines.length <= 2 && (
-            <Text style={styles.cursor}>|</Text>
-          )}
-        </Text>
-
-        <View style={styles.confidenceContainer}>
-          <Text style={styles.confidenceText}>
-            {lines[2] || `Confidence: ${aiResults.confidence.toFixed(2)}%`}
-            {isTyping && currentCard === "header" && lines.length <= 3 && (
-              <Text style={styles.cursor}>|</Text>
-            )}
-          </Text>
-          <View style={styles.progressBar}>
-            <View
-              style={[
-                styles.progressFill,
-                { 
-                  width: `${aiResults.confidence}%`,
-                  opacity: isTyping && currentCard === "header" ? 0.7 : 1
-                },
-              ]}
-            />
-          </View>
-        </View>
-      </View>
-    );
-  };
-
-  // Render section card content
-  const renderSectionContent = (sectionKey) => {
-    const content = displayData[sectionKey] || "●";
-    
-    if (content === "●") {
-      return (
-        <Text style={[styles.sectionText, styles.typingText]}>
-          {content}
-          {isTyping && currentCard === sectionKey && (
-            <Text style={styles.cursor}>|</Text>
-          )}
-        </Text>
-      );
-    }
-
-    const lines = content.split('\n');
-    return lines.map((line, index) => {
-      if (line.startsWith('   ◦ ')) {
-        return (
-          <Text key={index} style={styles.listItem}>
-            {line}
-            {isTyping && currentCard === sectionKey && index === lines.length - 1 && (
-              <Text style={styles.cursor}>|</Text>
-            )}
-          </Text>
-        );
-      } else if (line.startsWith('• ')) {
-        return (
-          <Text key={index} style={styles.sectionText}>
-            {line}
-            {isTyping && currentCard === sectionKey && index === lines.length - 1 && (
-              <Text style={styles.cursor}>|</Text>
-            )}
-          </Text>
-        );
-      } else {
-        return (
-          <Text key={index} style={styles.sectionText}>
-            {line}
-            {isTyping && currentCard === sectionKey && index === lines.length - 1 && (
-              <Text style={styles.cursor}>|</Text>
-            )}
-          </Text>
-        );
-      }
-    });
   };
 
   return (
@@ -360,14 +206,26 @@ const HistoryDetail = () => {
           >
             <Ionicons name="arrow-back" size={24} color="#2e7d32" />
           </TouchableOpacity>
-          <Text style={styles.headerText}>Analysis Details</Text>
-          <TouchableOpacity style={styles.shareButton}>
-            <Ionicons name="share-outline" size={24} color="#2e7d32" />
-          </TouchableOpacity>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerText}>Analysis Details</Text>
+            {analysisData.user_id && (
+              <Text style={styles.userId}>User ID: {analysisData.user_id}</Text>
+            )}
+          </View>
+          <View style={styles.headerRightButtons}>
+            <TouchableOpacity 
+              style={styles.deleteButton}
+              onPress={confirmDelete}
+            >
+              <Ionicons name="trash-outline" size={22} color="#d32f2f" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.shareButton}>
+              <Ionicons name="share-outline" size={24} color="#2e7d32" />
+            </TouchableOpacity>
+          </View>
         </View>
 
         <ScrollView
-          ref={scrollViewRef}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
@@ -382,14 +240,9 @@ const HistoryDetail = () => {
                 defaultSource={require('../assets/female.png')}
               />
               <View style={styles.imageOverlay}>
-                <Text style={styles.imageText}>{historyItem.analysisNo}</Text>
+                <Text style={styles.imageText}>{historyItem.analysisNo || `ID: ${analysisData.id}`}</Text>
                 <Text style={styles.imageDate}>
-                  {new Date(historyItem.date).toLocaleDateString('en-US', {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                  })}
+                  {formatDate(analysisData.created_at || historyItem.date)}
                 </Text>
               </View>
             </View>
@@ -400,63 +253,75 @@ const HistoryDetail = () => {
             <Text style={styles.sectionTitle}>AI Analysis Results</Text>
             
             {/* Header Card */}
-            {visibleCards.includes("header") && (
-              <Animated.View 
-                style={[styles.headerCard, { opacity: fadeAnim }]}
-                onLayout={(event) => onCardLayout("header", event)}
-              >
-                {renderHeaderContent()}
-              </Animated.View>
-            )}
+            <View style={styles.headerCard}>
+              <Text style={styles.headerTitle}>Analysis Report</Text>
+              <Text style={styles.diseaseName}>{analysisData.disease || "Unknown Condition"}</Text>
+              <View style={styles.confidenceContainer}>
+                <Text style={styles.confidenceText}>
+                  Confidence: {analysisData.confidence ? analysisData.confidence.toFixed(2) + '%' : 'N/A'}
+                </Text>
+                <View style={styles.progressBar}>
+                  <View
+                    style={[
+                      styles.progressFill,
+                      { 
+                        width: `${analysisData.confidence ? Math.min(analysisData.confidence, 100) : 0}%`,
+                      },
+                    ]}
+                  />
+                </View>
+              </View>
+            </View>
 
             {/* Section Cards */}
-            {Object.keys(aiResults.sections).map((sectionKey) => (
-              visibleCards.includes(sectionKey) && (
-                <Animated.View 
-                  key={sectionKey} 
-                  style={[styles.sectionCard, { opacity: fadeAnim }]}
-                  onLayout={(event) => onCardLayout(sectionKey, event)}
-                >
-                  <Text style={styles.sectionTitle}>
-                    {sectionKey}
-                    {isTyping && currentCard === sectionKey && (
-                      <Text style={styles.cursor}>|</Text>
-                    )}
-                  </Text>
-                  {renderSectionContent(sectionKey)}
-                </Animated.View>
-              )
+            {analysisData.sections && Object.keys(analysisData.sections).map((sectionKey) => (
+              <View key={sectionKey} style={styles.sectionCard}>
+                <Text style={styles.sectionTitle}>{sectionKey}</Text>
+                {formatSectionContent(analysisData.sections[sectionKey])}
+              </View>
             ))}
           </View>
 
           {/* Action Buttons */}
-          {!isTyping && (
-            <View style={styles.actionButtons}>
-              <TouchableOpacity style={styles.primaryButton}>
-                <Ionicons name="medical-outline" size={20} color="#fff" />
-                <Text style={styles.primaryButtonText}>Save Treatment Plan</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.secondaryButton}>
-                <Ionicons name="calendar-outline" size={20} color="#2e7d32" />
-                <Text style={styles.secondaryButtonText}>Schedule Follow-up</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+          <View style={styles.actionButtons}>
+            <TouchableOpacity style={styles.primaryButton}>
+              <Ionicons name="medical-outline" size={20} color="#fff" />
+              <Text style={styles.primaryButtonText}>Save Treatment Plan</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.secondaryButton}>
+              <Ionicons name="calendar-outline" size={20} color="#2e7d32" />
+              <Text style={styles.secondaryButtonText}>Schedule Follow-up</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Delete Warning */}
+          <View style={styles.deleteWarning}>
+            <Ionicons name="warning-outline" size={16} color="#f57c00" />
+            <Text style={styles.deleteWarningText}>
+              You can delete this analysis using the trash icon in the header
+            </Text>
+          </View>
 
           {/* Footer */}
-          {!isTyping && (
-            <Text style={styles.footerText}>
-              AI-powered Hair Analysis • {historyItem.date}
-            </Text>
-          )}
+          <Text style={styles.footerText}>
+            AI-powered Hair Analysis • {formatDate(analysisData.created_at || historyItem.date).split(',')[0]}
+          </Text>
         </ScrollView>
+
+        {/* Loading Overlay for Delete */}
+        {isDeleting && (
+          <View style={styles.loadingOverlay}>
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#2e7d32" />
+              <Text style={styles.loadingText}>Deleting analysis...</Text>
+            </View>
+          </View>
+        )}
       </LinearGradient>
     </SafeAreaView>
   );
 };
-
-// ... (styles remain exactly the same as in your original code)
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -481,10 +346,29 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: "#f1f8e9",
   },
+  headerCenter: {
+    alignItems: 'center',
+    flex: 1,
+  },
   headerText: {
     fontSize: 20,
     fontWeight: "bold",
     color: "#2e7d32",
+  },
+  userId: {
+    fontSize: 12,
+    color: '#757575',
+    marginTop: 2,
+  },
+  headerRightButtons: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  deleteButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: "#ffebee",
+    marginRight: 10,
   },
   shareButton: {
     padding: 8,
@@ -607,21 +491,10 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   listItem: {
-    fontSize: 13,
-    color: "#636e72",
-    lineHeight: 18,
-    marginLeft: 10,
-  },
-  
-  // Typing effects
-  typingText: {
-    fontStyle: "italic",
-    color: "#81c784",
-  },
-  cursor: {
-    color: "#00b894",
-    fontWeight: "bold",
-    opacity: 0.7,
+    fontSize: 14,
+    color: "#2d3436",
+    lineHeight: 20,
+    marginBottom: 6,
   },
   
   // Action Buttons
@@ -673,12 +546,58 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   
+  // Delete Warning
+  deleteWarning: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff3e0",
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 15,
+    marginBottom: 10,
+  },
+  deleteWarningText: {
+    fontSize: 12,
+    color: "#f57c00",
+    marginLeft: 8,
+    flex: 1,
+  },
+  
   // Footer
   footerText: {
     textAlign: "center",
     fontSize: 12,
     color: "#95a5a6",
     marginTop: 20,
+  },
+  
+  // Loading Overlay
+  loadingOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingContainer: {
+    backgroundColor: "#ffffff",
+    borderRadius: 20,
+    padding: 30,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  loadingText: {
+    marginTop: 15,
+    fontSize: 16,
+    color: "#2e7d32",
+    fontWeight: "600",
   },
 });
 
