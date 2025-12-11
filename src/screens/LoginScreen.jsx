@@ -146,7 +146,8 @@ const LoginScreen = () => {
     }
     try {
       setLoading(true);
-      const res = await axios.post('${url}/login/email_verification', {
+      const res = await axios.post(`${url}/login/email_verification`
+, {
         email: username,
         verificationCode: code,
       });

@@ -49,19 +49,132 @@ const HistoryDetail = () => {
   };
   
   const [isDeleting, setIsDeleting] = useState(false);
+  const [hairImages, setHairImages] = useState([]);
+  const [loadingImages, setLoadingImages] = useState(true);
+
+  // Build image URL from image path
+  const buildImageUrl = (imagePath) => {
+    if (!imagePath) {
+      console.log("⚠️ No image path provided");
+      return null;
+    }
+    
+    // If it's already a full URL, return it
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      return imagePath;
+    }
+    
+    // Build URL using the getImage endpoint
+    const imageUrl = `${BASE_URL}/image/getImage?imagePath=${encodeURIComponent(imagePath)}`;
+    console.log(`🖼️ Built image URL: ${imageUrl}`);
+    return imageUrl;
+  };
 
   // Get JWT token from AsyncStorage
   const getAuthToken = async () => {
     try {
-      const token = await AsyncStorage.getItem('userToken') || 
-                    await AsyncStorage.getItem('token') || 
-                    await AsyncStorage.getItem('jwtToken');
-      return token;
+      const tokenKeys = ['userToken', 'token', 'jwtToken', 'authToken'];
+      for (const key of tokenKeys) {
+        const token = await AsyncStorage.getItem(key);
+        if (token) {
+          console.log(`✅ Token found with key: ${key}`);
+          return token;
+        }
+      }
+      console.log("❌ No token found in AsyncStorage");
+      return null;
     } catch (error) {
       console.error("Error getting auth token:", error);
       return null;
     }
   };
+
+  // Fetch hair images for this analysis
+  const fetchHairImages = async () => {
+    try {
+      setLoadingImages(true);
+      const token = await getAuthToken();
+      
+      if (!token) {
+        console.log("⚠️ No token available, using placeholder image");
+        setLoadingImages(false);
+        return;
+      }
+
+      console.log(`📡 Fetching images for analysis ID: ${analysisData.id}`);
+
+      // Fetch the specific analysis details to get image paths
+      const response = await axios.get(`${BASE_URL}/api/ai-responses/${analysisData.id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        timeout: 10000
+      });
+
+      console.log("✅ Analysis details response:", response.data);
+
+      if (response.data) {
+        const data = response.data;
+        const images = [];
+
+        // Check for various possible image path fields
+        if (data.imagePath) {
+          images.push({
+            id: 1,
+            path: data.imagePath,
+            url: buildImageUrl(data.imagePath)
+          });
+        } else if (data.image_path) {
+          images.push({
+            id: 1,
+            path: data.image_path,
+            url: buildImageUrl(data.image_path)
+          });
+        }
+
+        // Check for hairImages array
+        if (data.hairImages && Array.isArray(data.hairImages)) {
+          data.hairImages.forEach((img, index) => {
+            const imagePath = img.imagePath || img.image_path;
+            if (imagePath) {
+              images.push({
+                id: img.id || index + 1,
+                path: imagePath,
+                url: buildImageUrl(imagePath)
+              });
+            }
+          });
+        } else if (data.hair_images && Array.isArray(data.hair_images)) {
+          data.hair_images.forEach((img, index) => {
+            const imagePath = img.imagePath || img.image_path;
+            if (imagePath) {
+              images.push({
+                id: img.id || index + 1,
+                path: imagePath,
+                url: buildImageUrl(imagePath)
+              });
+            }
+          });
+        }
+
+        console.log(`📸 Found ${images.length} images`);
+        setHairImages(images);
+      }
+    } catch (error) {
+      console.error("❌ Error fetching hair images:", error);
+      if (error.response) {
+        console.error("Response error:", error.response.status, error.response.data);
+      }
+    } finally {
+      setLoadingImages(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchHairImages();
+  }, [analysisData.id]);
 
   // Delete analysis function
   const deleteAnalysis = async () => {
@@ -80,7 +193,7 @@ const HistoryDetail = () => {
       }
 
       const DELETE_URL = `${BASE_URL}/api/ai-responses/${analysisData.id}`;
-      console.log("Deleting analysis:", DELETE_URL);
+      console.log("🗑️ Deleting analysis:", DELETE_URL);
 
       const response = await axios.delete(DELETE_URL, {
         headers: {
@@ -89,10 +202,9 @@ const HistoryDetail = () => {
         }
       });
 
-      console.log("Delete response:", response.status);
+      console.log("✅ Delete response:", response.status);
 
       if (response.status === 200 || response.status === 204) {
-        // Show success message
         Alert.alert(
           "Success",
           "Analysis deleted successfully!",
@@ -100,9 +212,7 @@ const HistoryDetail = () => {
             {
               text: "OK",
               onPress: () => {
-                // Navigate back to history screen
                 navigation.goBack();
-                // You might want to pass a callback to refresh the list
                 if (route.params?.onDelete) {
                   route.params.onDelete(analysisData.id);
                 }
@@ -114,7 +224,7 @@ const HistoryDetail = () => {
         throw new Error("Failed to delete analysis");
       }
     } catch (error) {
-      console.error("Error deleting analysis:", error);
+      console.error("❌ Error deleting analysis:", error);
       
       let errorMessage = "Failed to delete analysis. Please try again.";
       
@@ -195,6 +305,14 @@ const HistoryDetail = () => {
     }
   };
 
+  // Get the primary image to display
+  const getPrimaryImage = () => {
+    if (hairImages.length > 0 && hairImages[0].url) {
+      return hairImages[0].url;
+    }
+    return historyItem.image;
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <LinearGradient colors={["#e8f5e9", "#ffffff"]} style={styles.container}>
@@ -216,6 +334,7 @@ const HistoryDetail = () => {
             <TouchableOpacity 
               style={styles.deleteButton}
               onPress={confirmDelete}
+              disabled={isDeleting}
             >
               <Ionicons name="trash-outline" size={22} color="#d32f2f" />
             </TouchableOpacity>
@@ -231,21 +350,81 @@ const HistoryDetail = () => {
         >
           {/* Analysis Image */}
           <View style={styles.imageSection}>
-            <Text style={styles.sectionTitle}>Hair Analysis Image</Text>
-            <View style={styles.imageContainer}>
-              <Image
-                source={{ uri: historyItem.image }}
-                style={styles.analysisImage}
-                resizeMode="cover"
-                defaultSource={require('../assets/female.png')}
-              />
-              <View style={styles.imageOverlay}>
-                <Text style={styles.imageText}>{historyItem.analysisNo || `ID: ${analysisData.id}`}</Text>
-                <Text style={styles.imageDate}>
-                  {formatDate(analysisData.created_at || historyItem.date)}
+            <View style={styles.imageSectionHeader}>
+              <Text style={styles.sectionTitle}>Hair Analysis Images</Text>
+              {hairImages.length > 0 && (
+                <Text style={styles.imageCount}>
+                  {hairImages.length} {hairImages.length === 1 ? 'image' : 'images'}
                 </Text>
-              </View>
+              )}
             </View>
+            
+            {loadingImages ? (
+              <View style={styles.loadingImageContainer}>
+                <ActivityIndicator size="large" color="#2e7d32" />
+                <Text style={styles.loadingImageText}>Loading images...</Text>
+              </View>
+            ) : (
+              <>
+                {/* Primary Image */}
+                <View style={styles.imageContainer}>
+                  <Image
+                    source={{ uri: getPrimaryImage() }}
+                    style={styles.analysisImage}
+                    resizeMode="cover"
+                    defaultSource={require('../assets/female.png')}
+                    onError={(e) => {
+                      console.log(`❌ Failed to load primary image:`, e.nativeEvent.error);
+                    }}
+                    onLoad={() => {
+                      console.log(`✅ Successfully loaded primary image`);
+                    }}
+                  />
+                  <View style={styles.imageOverlay}>
+                    <Text style={styles.imageText}>{historyItem.analysisNo || `ID: ${analysisData.id}`}</Text>
+                    <Text style={styles.imageDate}>
+                      {formatDate(analysisData.created_at || historyItem.date)}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Additional Images Thumbnail Gallery */}
+                {hairImages.length > 1 && (
+                  <View style={styles.thumbnailGallery}>
+                    <Text style={styles.galleryLabel}>All Images:</Text>
+                    <ScrollView 
+                      horizontal 
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.thumbnailContainer}
+                    >
+                      {hairImages.map((img, index) => (
+                        <View key={img.id || index} style={styles.thumbnailWrapper}>
+                          <Image
+                            source={{ uri: img.url }}
+                            style={styles.thumbnail}
+                            resizeMode="cover"
+                            onError={(e) => {
+                              console.log(`❌ Failed to load thumbnail ${index + 1}:`, e.nativeEvent.error);
+                            }}
+                          />
+                          <Text style={styles.thumbnailLabel}>{index + 1}</Text>
+                        </View>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+
+                {/* Image Path Info */}
+                {hairImages.length > 0 && hairImages[0].path && (
+                  <View style={styles.imagePathInfo}>
+                    <Ionicons name="image-outline" size={14} color="#757575" />
+                    <Text style={styles.imagePathText} numberOfLines={1}>
+                      {hairImages[0].path.split('/').pop()}
+                    </Text>
+                  </View>
+                )}
+              </>
+            )}
           </View>
 
           {/* AI Generated Results */}
@@ -384,11 +563,33 @@ const styles = StyleSheet.create({
   imageSection: {
     marginBottom: 25,
   },
+  imageSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  imageCount: {
+    fontSize: 14,
+    color: '#757575',
+    fontWeight: '600',
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: "bold",
     color: "#2e7d32",
-    marginBottom: 15,
+  },
+  loadingImageContainer: {
+    height: 250,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    borderRadius: 20,
+  },
+  loadingImageText: {
+    marginTop: 10,
+    fontSize: 14,
+    color: '#757575',
   },
   imageContainer: {
     borderRadius: 20,
@@ -398,6 +599,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowRadius: 8,
     elevation: 4,
+    backgroundColor: '#f5f5f5',
   },
   analysisImage: {
     width: "100%",
@@ -420,6 +622,51 @@ const styles = StyleSheet.create({
   imageDate: {
     color: "#e8f5e9",
     fontSize: 14,
+  },
+  thumbnailGallery: {
+    marginTop: 15,
+  },
+  galleryLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2e7d32',
+    marginBottom: 10,
+  },
+  thumbnailContainer: {
+    paddingVertical: 5,
+  },
+  thumbnailWrapper: {
+    marginRight: 12,
+    alignItems: 'center',
+  },
+  thumbnail: {
+    width: 80,
+    height: 80,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#e8f5e9',
+  },
+  thumbnailLabel: {
+    marginTop: 4,
+    fontSize: 11,
+    color: '#757575',
+    fontWeight: '600',
+  },
+  imagePathInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+  },
+  imagePathText: {
+    fontSize: 12,
+    color: '#757575',
+    marginLeft: 6,
+    flex: 1,
+    fontStyle: 'italic',
   },
   
   // Results Section

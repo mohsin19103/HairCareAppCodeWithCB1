@@ -24,24 +24,14 @@ const CameraScreen = () => {
 
   const [photos, setPhotos] = useState([]);
   const [isCameraActive, setIsCameraActive] = useState(true);
-  const [currentView, setCurrentView] = useState("front");
   const [showAllPhotos, setShowAllPhotos] = useState(false);
   const [lastCapturedPhoto, setLastCapturedPhoto] = useState(null);
 
-  const guideImages = {
-    front: require("../assets/top.jpg"),
-    back: require("../assets/back.jpg"),
-  };
+  const currentView = "top"; 
+  const guideImage = require("../assets/top.jpg"); 
 
-  const viewTitles = {
-    front: "Front View",
-    back: "Back View",
-  };
-
-  const viewInstructions = {
-    front: "Take a photo of your hair from the front angle",
-    back: "Take a photo of the back of your head",
-  };
+  const viewTitle = "Top View";
+  const viewInstruction = "Take a photo of your hair from the top angle";
 
   const startAnalysis = () => {
     navigation.navigate("ResultsScreen", { photos });
@@ -76,9 +66,6 @@ const CameraScreen = () => {
     if (cameraRef.current) {
       try {
         const photo = await cameraRef.current.takePhoto();
-        console.log("Camera photo path:", photo.path); // Debug log
-        
-        // Add "file://" prefix for camera images
         const photoPath = `file://${photo.path}`;
         setLastCapturedPhoto(photoPath);
         setIsCameraActive(false);
@@ -109,12 +96,8 @@ const CameraScreen = () => {
             view: currentView,
             path: selectedAsset.uri,
           };
-          
-          console.log("Gallery photo path:", selectedAsset.uri); // Debug log
           setLastCapturedPhoto(selectedAsset.uri);
           setIsCameraActive(false);
-          
-          // Auto-confirm the gallery image after a short delay
           setTimeout(() => {
             confirmPhotoFromGallery(selectedPhoto);
           }, 100);
@@ -126,47 +109,16 @@ const CameraScreen = () => {
   };
 
   const confirmPhotoFromGallery = (selectedPhoto) => {
-    setPhotos((prevPhotos) => {
-      const newPhotos = [...prevPhotos, selectedPhoto];
-      if (newPhotos.length === 2) {
-        setShowAllPhotos(true);
-      } else {
-        const viewsOrder = ["front", "back"];
-        const currentIndex = viewsOrder.indexOf(currentView);
-        if (currentIndex < viewsOrder.length - 1) {
-          setCurrentView(viewsOrder[currentIndex + 1]);
-          setIsCameraActive(true);
-        }
-      }
-      return newPhotos;
-    });
+    setPhotos([selectedPhoto]);
+    setShowAllPhotos(true);
     setLastCapturedPhoto(null);
   };
 
   const confirmPhoto = () => {
     if (!lastCapturedPhoto) return;
-    
-    const photoToAdd = { 
-      view: currentView, 
-      path: lastCapturedPhoto 
-    };
-    
-    console.log("Confirming photo:", photoToAdd); // Debug log
-    
-    setPhotos((prevPhotos) => {
-      const newPhotos = [...prevPhotos, photoToAdd];
-      if (newPhotos.length === 2) {
-        setShowAllPhotos(true);
-      } else {
-        const viewsOrder = ["front", "back"];
-        const currentIndex = viewsOrder.indexOf(currentView);
-        if (currentIndex < viewsOrder.length - 1) {
-          setCurrentView(viewsOrder[currentIndex + 1]);
-          setIsCameraActive(true);
-        }
-      }
-      return newPhotos;
-    });
+    const photoToAdd = { view: currentView, path: lastCapturedPhoto };
+    setPhotos([photoToAdd]);
+    setShowAllPhotos(true);
     setLastCapturedPhoto(null);
   };
 
@@ -175,9 +127,9 @@ const CameraScreen = () => {
     setIsCameraActive(true);
   };
 
-  const retakeSpecificPhoto = (view) => {
-    setPhotos((prevPhotos) => prevPhotos.filter((photo) => photo.view !== view));
-    setCurrentView(view);
+  const retakeSpecificPhoto = () => {
+    setPhotos([]);
+    setLastCapturedPhoto(null);
     setIsCameraActive(true);
     setShowAllPhotos(false);
   };
@@ -186,7 +138,6 @@ const CameraScreen = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Hair Health Scan</Text>
         <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -194,10 +145,9 @@ const CameraScreen = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Review Photos */}
       {showAllPhotos ? (
         <View style={styles.allPhotosContainer}>
-          <Text style={styles.allPhotosTitle}>Review Your Photos</Text>
+          <Text style={styles.allPhotosTitle}>Review Your Photo</Text>
           <ScrollView contentContainerStyle={styles.photosGrid}>
             {photos.map((photo, index) => (
               <View key={index} style={styles.photoCard}>
@@ -206,10 +156,10 @@ const CameraScreen = () => {
                   style={styles.capturedImage}
                   resizeMode="cover"
                 />
-                <Text style={styles.photoLabel}>{viewTitles[photo.view]}</Text>
+                <Text style={styles.photoLabel}>{viewTitle}</Text>
                 <TouchableOpacity
                   style={styles.secondaryButton}
-                  onPress={() => retakeSpecificPhoto(photo.view)}
+                  onPress={retakeSpecificPhoto}
                 >
                   <Text style={styles.secondaryButtonText}>Retake</Text>
                 </TouchableOpacity>
@@ -217,21 +167,22 @@ const CameraScreen = () => {
             ))}
           </ScrollView>
 
-          <TouchableOpacity style={styles.primaryButton} onPress={startAnalysis}>
-            <Text style={styles.primaryButtonText}>Start Analysis</Text>
-          </TouchableOpacity>
+          {photos.length > 0 && (
+            <TouchableOpacity style={styles.primaryButton} onPress={startAnalysis}>
+              <Text style={styles.primaryButtonText}>Start Analysis</Text>
+            </TouchableOpacity>
+          )}
         </View>
       ) : isCameraActive ? (
-        /* Camera View */
         <View style={styles.cameraViewContainer}>
           <View style={styles.guideContainer}>
-            <Text style={styles.viewTitle}>{viewTitles[currentView]}</Text>
+            <Text style={styles.viewTitle}>{viewTitle}</Text>
             <Image
-              source={guideImages[currentView]}
+              source={guideImage}
               style={styles.guideImage}
               resizeMode="contain"
             />
-            <Text style={styles.guideText}>{viewInstructions[currentView]}</Text>
+            <Text style={styles.guideText}>{viewInstruction}</Text>
           </View>
 
           <View style={styles.cameraContainer}>
@@ -256,15 +207,13 @@ const CameraScreen = () => {
               <View style={styles.captureButtonInner} />
             </TouchableOpacity>
             
-            {/* Empty view for balance */}
             <View style={styles.emptyView} />
           </View>
         </View>
       ) : (
-        /* Preview View - Show captured/selected image */
         <View style={styles.previewContainer}>
           <View style={styles.guideContainer}>
-            <Text style={styles.viewTitle}>{viewTitles[currentView]}</Text>
+            <Text style={styles.viewTitle}>{viewTitle}</Text>
             {lastCapturedPhoto && (
               <Image
                 source={{ uri: lastCapturedPhoto }}
@@ -279,7 +228,7 @@ const CameraScreen = () => {
               <Text style={styles.secondaryButtonText}>Retake</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.primaryButton} onPress={confirmPhoto}>
-              <Text style={styles.primaryButtonText}>Next</Text>
+              <Text style={styles.primaryButtonText}>Use This Photo</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -290,7 +239,6 @@ const CameraScreen = () => {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#ffffff" },
-
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -302,13 +250,11 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 20, fontWeight: "700", color: "#0b8a46" },
   closeButton: { fontSize: 28, color: "#0b8a46" },
-
   cameraViewContainer: { flex: 1, justifyContent: "space-between" },
   guideContainer: { alignItems: "center", paddingHorizontal: 20, paddingTop: 10 },
   viewTitle: { fontSize: 20, fontWeight: "600", marginBottom: 8, color: "#0b8a46" },
   guideImage: { width: width * 0.4, height: height * 0.15, borderRadius: 16, marginBottom: 10 },
   guideText: { fontSize: 15, textAlign: "center", color: "#333" },
-
   cameraContainer: {
     width: "90%",
     height: height * 0.5,
@@ -318,7 +264,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#000",
   },
   cameraView: { flex: 1 },
-
   bottomButtonsContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -326,7 +271,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 30,
     marginBottom: 30,
   },
-  
   galleryButton: {
     backgroundColor: "#e6f5ec",
     paddingVertical: 12,
@@ -336,12 +280,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#0b8a46",
   },
-  galleryButtonText: {
-    color: "#0b8a46",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  
+  galleryButtonText: { color: "#0b8a46", fontSize: 16, fontWeight: "600" },
   captureButton: {
     width: 78,
     height: 78,
@@ -353,62 +292,19 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(11,138,70,0.1)",
   },
   captureButtonInner: { width: 58, height: 58, borderRadius: 29, backgroundColor: "#0b8a46" },
-  
-  emptyView: { width: 80 }, // For balance
-
+  emptyView: { width: 80 },
   previewContainer: { flex: 1, justifyContent: "space-between" },
-  previewImage: {
-    width: width * 0.95,
-    height: height * 0.5,
-    borderRadius: 16,
-    alignSelf: "center",
-    borderWidth: 1,
-    borderColor: "#a8d5b9",
-  },
-  previewButtons: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    paddingHorizontal: 20,
-    paddingBottom: 30,
-  },
-
-  primaryButton: {
-    backgroundColor: "#0b8a46",
-    paddingVertical: 14,
-    paddingHorizontal: 25,
-    borderRadius: 30,
-    alignItems: "center",
-    minWidth: width * 0.35,
-  },
+  previewImage: { width: width * 0.95, height: height * 0.5, borderRadius: 16, alignSelf: "center", borderWidth: 1, borderColor: "#a8d5b9" },
+  previewButtons: { flexDirection: "row", justifyContent: "space-around", paddingHorizontal: 20, paddingBottom: 30 },
+  primaryButton: { backgroundColor: "#0b8a46", paddingVertical: 14, paddingHorizontal: 25, borderRadius: 30, alignItems: "center", minWidth: width * 0.35 },
   primaryButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-
-  secondaryButton: {
-    backgroundColor: "#e6f5ec",
-    paddingVertical: 14,
-    paddingHorizontal: 25,
-    borderRadius: 30,
-    alignItems: "center",
-    minWidth: width * 0.35,
-  },
+  secondaryButton: { backgroundColor: "#e6f5ec", paddingVertical: 14, paddingHorizontal: 25, borderRadius: 30, alignItems: "center", minWidth: width * 0.35 },
   secondaryButtonText: { color: "#0b8a46", fontSize: 16, fontWeight: "500" },
-
-  allPhotosContainer: { flex: 1, paddingTop: 20, paddingBottom: 30 },
-  allPhotosTitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    textAlign: "center",
-    marginBottom: 20,
-    color: "#0b8a46",
-  },
-  photosGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", paddingBottom: 20 },
+  allPhotosContainer: { flex: 1, paddingTop: 20, paddingBottom: 30, justifyContent: 'space-between' },
+  allPhotosTitle: { fontSize: 20, fontWeight: "600", textAlign: "center", marginBottom: 20, color: "#0b8a46" },
+  photosGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", paddingBottom: 20, alignItems: 'center' },
   photoCard: { width: width * 0.45, margin: 8, alignItems: "center" },
-  capturedImage: {
-    width: "100%",
-    height: 150,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#a8d5b9",
-  },
+  capturedImage: { width: "100%", height: 150, borderRadius: 16, borderWidth: 1, borderColor: "#a8d5b9" },
   photoLabel: { fontSize: 14, marginTop: 5, color: "#0b8a46" },
 });
 

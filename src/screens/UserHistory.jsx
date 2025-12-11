@@ -36,14 +36,34 @@ const UserHistory = () => {
       for (const key of tokenKeys) {
         const token = await AsyncStorage.getItem(key);
         if (token) {
+          console.log(`✅ Token found with key: ${key}`);
           return token;
         }
       }
+      console.log("❌ No token found in AsyncStorage");
       return null;
     } catch (error) {
       console.error("Error getting auth token:", error);
       return null;
     }
+  };
+
+  // Build image URL from image path
+  const buildImageUrl = (imagePath) => {
+    if (!imagePath) {
+      console.log("⚠️ No image path provided");
+      return null;
+    }
+    
+    // If it's already a full URL, return it
+    if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+      return imagePath;
+    }
+    
+    // Build URL using the getImage endpoint
+    const imageUrl = `${BASE_URL}/image/getImage?imagePath=${encodeURIComponent(imagePath)}`;
+    console.log(`🖼️ Built image URL: ${imageUrl}`);
+    return imageUrl;
   };
 
   // Fetch user analysis history
@@ -59,6 +79,8 @@ const UserHistory = () => {
         return;
       }
 
+      console.log("📡 Fetching user history...");
+      
       const response = await axios.get(USER_HISTORY_URL, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -68,30 +90,67 @@ const UserHistory = () => {
         timeout: 15000
       });
 
+      console.log("✅ Response received:", response.data);
+
       if (response.data && Array.isArray(response.data)) {
         if (response.data.length === 0) {
+          console.log("📭 No history data found");
           setHistoryData([]);
         } else {
-          const transformedData = response.data.map((item, index) => ({
-            id: item.id,
-            date: item.created_at || item.createdAt || new Date().toISOString(),
-            analysisNo: `HA-${item.id.toString().padStart(3, '0')}`,
-            image: getImageUrl(item),
-            condition: item.disease || item.predicted_label || "Unknown Condition",
-            confidence: item.confidence ? `${Math.round(item.confidence)}%` : "N/A",
-            confidenceValue: item.confidence || 0,
-            sections: item.sections || {},
-            originalData: item
-          }));
+          console.log(`📊 Processing ${response.data.length} history items...`);
           
+          const transformedData = response.data.map((item, index) => {
+            // Extract image path from the response
+            let imagePath = null;
+            
+            // Check various possible fields for image path
+            if (item.imagePath) {
+              imagePath = item.imagePath;
+            } else if (item.image_path) {
+              imagePath = item.image_path;
+            } else if (item.hairImages && Array.isArray(item.hairImages) && item.hairImages.length > 0) {
+              // If hairImages array exists, take the first image path
+              imagePath = item.hairImages[0].imagePath || item.hairImages[0].image_path;
+            } else if (item.hair_images && Array.isArray(item.hair_images) && item.hair_images.length > 0) {
+              imagePath = item.hair_images[0].imagePath || item.hair_images[0].image_path;
+            }
+
+            console.log(`Item ${index + 1} - ID: ${item.id}, Image Path: ${imagePath}`);
+
+            // Build the complete image URL
+            const imageUrl = buildImageUrl(imagePath);
+
+            return {
+              id: item.id,
+              date: item.created_at || item.createdAt || new Date().toISOString(),
+              analysisNo: `HA-${item.id.toString().padStart(3, '0')}`,
+              image: imageUrl || getPlaceholderImage(item),
+              imagePath: imagePath,
+              condition: item.disease || item.predicted_label || item.condition || "Unknown Condition",
+              confidence: item.confidence ? `${Math.round(item.confidence)}%` : "N/A",
+              confidenceValue: item.confidence || 0,
+              sections: item.sections || {},
+              originalData: item
+            };
+          });
+          
+          // Sort by date descending (newest first)
           transformedData.sort((a, b) => new Date(b.date) - new Date(a.date));
+          
+          console.log("✅ History data transformed successfully");
           setHistoryData(transformedData);
         }
       } else {
+        console.log("⚠️ Invalid response format");
         setHistoryData([]);
       }
     } catch (error) {
-      console.error("Error fetching user history:", error);
+      console.error("❌ Error fetching user history:", error);
+      
+      if (error.response) {
+        console.error("Response error:", error.response.status, error.response.data);
+      }
+      
       if (error.response?.status === 401 || error.response?.status === 403) {
         setError("Session expired. Please login again.");
       } else if (error.response?.status === 404) {
@@ -106,14 +165,9 @@ const UserHistory = () => {
     }
   };
 
-  // Helper function to get appropriate image URL
-  const getImageUrl = (item) => {
-    if (item.image && item.image.startsWith('http')) return item.image;
-    if (item.userImage && item.userImage.startsWith('http')) return item.userImage;
-    if (item.captureImage && item.captureImage.startsWith('http')) return item.captureImage;
-    if (item.photo && item.photo.startsWith('http')) return item.photo;
-    
-    const condition = item.disease || item.predicted_label || "hair";
+  // Helper function to get placeholder image based on condition
+  const getPlaceholderImage = (item) => {
+    const condition = item.disease || item.predicted_label || item.condition || "hair";
     const conditionLower = condition.toLowerCase();
     
     if (conditionLower.includes("healthy")) {
@@ -137,6 +191,7 @@ const UserHistory = () => {
   };
 
   const handleCardPress = (item) => {
+    console.log("📱 Opening detail for analysis:", item.analysisNo);
     navigation.navigate("HistoryDetail", { 
       historyItem: item,
       analysisData: item.originalData 
@@ -304,11 +359,19 @@ const UserHistory = () => {
                 >
                   {/* Circular Image */}
                   <View style={styles.imageContainer}>
-                    <Image
-                      source={{ uri: item.image }}
-                      style={styles.circularImage}
-                      defaultSource={require('../assets/female.png')}
-                    />
+                    <View style={styles.imageWrapper}>
+                      <Image
+                        source={{ uri: item.image }}
+                        style={styles.circularImage}
+                        defaultSource={require('../assets/female.png')}
+                        onError={(e) => {
+                          console.log(`❌ Failed to load image for analysis ${item.id}:`, e.nativeEvent.error);
+                        }}
+                        onLoad={() => {
+                          console.log(`✅ Successfully loaded image for analysis ${item.id}`);
+                        }}
+                      />
+                    </View>
                     <View 
                       style={[
                         styles.conditionBadge,
@@ -337,6 +400,14 @@ const UserHistory = () => {
                       <View style={styles.userIdContainer}>
                         <Ionicons name="person-outline" size={10} color="#9e9e9e" />
                         <Text style={styles.userId}>ID: {item.originalData.user_id}</Text>
+                      </View>
+                    )}
+                    {item.imagePath && (
+                      <View style={styles.imagePathContainer}>
+                        <Ionicons name="image-outline" size={10} color="#9e9e9e" />
+                        <Text style={styles.imagePathText} numberOfLines={1}>
+                          {item.imagePath.split('/').pop()}
+                        </Text>
                       </View>
                     )}
                   </View>
@@ -485,41 +556,51 @@ const styles = StyleSheet.create({
   historyCard: {
     flexDirection: "row",
     backgroundColor: "#ffffff",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 14,
     alignItems: "center",
     shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 6,
-    elevation: 3,
-    borderLeftWidth: 4,
+    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: 3 },
+    shadowRadius: 8,
+    elevation: 4,
+    borderLeftWidth: 5,
     borderLeftColor: "#2e7d32",
+    minHeight: 110,
   },
   imageContainer: {
     position: "relative",
-    marginRight: 12,
+    marginRight: 16,
+  },
+  imageWrapper: {
+    width: 85,
+    height: 85,
+    borderRadius: 42.5,
+    overflow: 'hidden',
+    borderWidth: 3,
+    borderColor: "#e8f5e9",
+    backgroundColor: "#f5f5f5",
   },
   circularImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    borderWidth: 2,
-    borderColor: "#e8f5e9",
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
   },
   conditionBadge: {
     position: "absolute",
-    bottom: -4,
-    right: -4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 8,
-    minWidth: 40,
+    bottom: -6,
+    right: -6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    minWidth: 50,
+    borderWidth: 2,
+    borderColor: "#ffffff",
   },
   conditionText: {
     color: "#ffffff",
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "700",
     textAlign: "center",
   },
@@ -530,38 +611,50 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 4,
+    marginBottom: 6,
   },
   analysisNo: {
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: "700",
     color: "#2e7d32",
   },
   confidenceValue: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "700",
     color: "#f57c00",
   },
   date: {
-    fontSize: 11,
+    fontSize: 12,
     color: "#757575",
-    marginBottom: 4,
+    marginBottom: 5,
     flexDirection: "row",
     alignItems: "center",
   },
   userIdContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 2,
+    marginTop: 3,
   },
   userId: {
-    fontSize: 10,
+    fontSize: 11,
     color: "#9e9e9e",
     marginLeft: 4,
   },
-  arrowContainer: {
-    padding: 6,
+  imagePathContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 2,
+    maxWidth: '80%',
+  },
+  imagePathText: {
+    fontSize: 9,
+    color: "#bdbdbd",
     marginLeft: 4,
+    fontStyle: "italic",
+  },
+  arrowContainer: {
+    padding: 8,
+    marginLeft: 6,
   },
   navigationBar: {
     flexDirection: "row",

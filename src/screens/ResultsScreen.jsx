@@ -1,13 +1,12 @@
-// ResultsScreen.js - Complete with Backend Integration
 import React, { useEffect, useRef, useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, Animated, ActivityIndicator } from "react-native";
 import { useNavigation, useRoute } from '@react-navigation/native';
 import LinearGradient from "react-native-linear-gradient";
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import RNFetchBlob from 'react-native-blob-util';
 import { config } from "../config";
 
-// Backend API base URL
-const BASE_URL = "http://10.80.72.3:8080";
+const BASE_URL = "http://10.124.177.3:8080";
 
 const ResultsScreen = () => {
   const navigation = useNavigation();
@@ -19,128 +18,133 @@ const ResultsScreen = () => {
   const [error, setError] = useState(null);
   const [showError, setShowError] = useState(false);
 
-  // Debug function to test token retrieval
   const testTokenRetrieval = async () => {
-    console.log('🧪 MANUAL TOKEN TEST STARTED');
     try {
       const token = await AsyncStorage.getItem('token');
       console.log('Token result:', token);
-      
-      const allKeys = await AsyncStorage.getAllKeys();
-      console.log('All keys:', allKeys);
-      
-      if (allKeys.length > 0) {
-        const allData = await AsyncStorage.multiGet(allKeys);
-        console.log('All AsyncStorage data:');
-        allData.forEach(([key, value]) => {
-          console.log(`  ${key}: ${value?.substring(0, 50)}...`);
-        });
-      }
     } catch (e) {
       console.error('Test error:', e);
     }
   };
 
-  // Function to save AI response to backend
-  const saveAIResponseToBackend = async (aiResponse) => {
-    console.log('========================================');
-    console.log('🚀 STARTING BACKEND SAVE PROCESS');
-    console.log('========================================');
-    
+  const uploadHairImages = async (analysisId, photos) => {
     try {
-      // Step 1: Get token
-      console.log('Step 1: Retrieving token from AsyncStorage...');
-      const token = await AsyncStorage.getItem('token');
-      
-      console.log('Step 2: Token check result:', token ? `Token exists (${token.length} chars)` : 'Token is NULL or empty');
-      
+      const token = await AsyncStorage.getItem("token");
       if (!token) {
-        console.log('Step 3: NO TOKEN - Checking all AsyncStorage keys...');
-        const allKeys = await AsyncStorage.getAllKeys();
-        console.log('All keys in AsyncStorage:', allKeys);
-        
-        if (allKeys.length === 0) {
-          console.log('⚠️ AsyncStorage is completely empty!');
-        }
-        
-        console.log('❌ ABORT: No auth token found, skipping backend save');
+        console.log("❌ No token found");
         return;
       }
 
-      // Step 4: Prepare payload
-      console.log('Step 4: Token found! Preparing payload...');
+      console.log(`📤 Uploading ${photos.length} images for analysis ID: ${analysisId}`);
+
+      // Upload each image separately since server expects 'imageFile' (singular)
+      for (let index = 0; index < photos.length; index++) {
+        const image = photos[index];
+        const imagePath = image.path.replace('file://', '');
+        
+        console.log(`📸 Uploading image ${index + 1}/${photos.length}: ${imagePath}`);
+
+        try {
+          const response = await RNFetchBlob.fetch(
+            'POST',
+            `${BASE_URL}/api/ai-responses/uploadHairImage/${analysisId}`,
+            {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'multipart/form-data',
+            },
+            [
+              {
+                name: 'imageFile', // Changed from 'images' to 'imageFile'
+                filename: `hair_${index}.jpg`,
+                type: 'image/jpeg',
+                data: RNFetchBlob.wrap(imagePath)
+              }
+            ]
+          );
+
+          const responseData = response.json();
+          console.log(`✅ Image ${index + 1} uploaded successfully:`, responseData);
+        } catch (uploadError) {
+          console.log(`❌ Failed to upload image ${index + 1}:`, uploadError);
+          // Continue with other images even if one fails
+        }
+      }
+
+      console.log("✅ All images upload process completed");
+    } catch (err) {
+      console.log("❌ Hair Upload Error:", err);
+      console.log("Error details:", err.message);
+    }
+  };
+
+  const saveAIResponseToBackend = async (aiResponse) => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) {
+        console.log("❌ No token available for backend save");
+        return null;
+      }
+
       const payload = {
-        result: {
-          disease: aiResponse.result?.disease || 'Unknown',
-          confidence: aiResponse.result?.confidence || 0,
-          sections: aiResponse.result?.sections || {},
-          predicted_class_index: aiResponse.result?.predicted_class_index,
-          predicted_label: aiResponse.result?.predicted_label,
-          probabilities: aiResponse.result?.probabilities,
-        },
+        result: aiResponse.result || {},
         processed_images: aiResponse.processed_images || photos.length,
         timestamp: new Date().toISOString(),
       };
 
-      console.log('Step 5: Payload prepared:', {
-        disease: payload.result.disease,
-        confidence: payload.result.confidence,
-        processed_images: payload.processed_images,
-      });
+      console.log("💾 Saving AI response to backend...");
 
-      // Step 6: Make API call
-      console.log('Step 6: Making API call to:', `${BASE_URL}/api/ai-responses`);
-      console.log('Authorization header:', `Bearer ${token.substring(0, 20)}...`);
-      
       const response = await fetch(`${BASE_URL}/api/ai-responses`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
       });
 
-      console.log('Step 7: Response received, status:', response.status);
-
       if (response.ok) {
         const result = await response.json();
-        console.log('✅ SUCCESS: AI response saved to backend');
-        console.log('Backend response:', result);
+        console.log("✅ Backend save successful:", result);
+        
+        const analysisId = result?.id;
+        if (analysisId) {
+          console.log(`📋 Analysis ID received: ${analysisId}`);
+          await uploadHairImages(analysisId, photos);
+        } else {
+          console.log("⚠️ No analysis ID in response");
+        }
+        
+        return result;
       } else {
         const errorText = await response.text();
-        console.log('❌ FAILED: Backend returned error');
-        console.log('Status:', response.status);
-        console.log('Error:', errorText);
+        console.log("❌ Backend save failed:", response.status, errorText);
+        return null;
       }
     } catch (error) {
-      console.log('❌ EXCEPTION: Error during backend save');
-      console.error('Error details:', error);
+      console.log('❌ Save to backend exception:', error);
+      console.log('Error message:', error.message);
+      return null;
     }
-    
-    console.log('========================================');
-    console.log('🏁 BACKEND SAVE PROCESS COMPLETE');
-    console.log('========================================');
   };
 
   const getResult = async () => {
-    if (photos.length === 0) return;
+    if (photos.length === 0) {
+      setError("No photos to process");
+      setShowError(true);
+      setLoading(false);
+      return;
+    }
 
     try {
+      console.log(`🚀 Starting AI analysis for ${photos.length} photos...`);
+      
       const formData = new FormData();
       photos.forEach((image, index) => {
         formData.append('images', {
-          uri: `file://${image.path}`,
+          uri: image.path,
           type: 'image/jpeg',
-          name: `image_${image.view}_${index}.jpg`,
+          name: `image_${index}.jpg`,
         });
-        formData.append(`view_${index}`, image.view);
-      });
-
-      console.log('📸 Sending images to AI API...');
-      console.log('Number of photos:', photos.length);
-      photos.forEach((photo, index) => {
-        console.log(`Photo ${index + 1}:`, photo);
       });
 
       const response = await fetch(`${config.AI_API_URL}/predict/image`, {
@@ -150,33 +154,26 @@ const ResultsScreen = () => {
       });
 
       const result = await response.json();
-      
-      console.log('🎯 FULL API RESPONSE:', JSON.stringify(result, null, 2));
-      
-      // Check for error in response
+      console.log("🤖 AI API Response:", result);
+
       if (result.error) {
+        console.log("❌ AI returned error:", result.error);
         setError(result.error);
         setShowError(true);
         setLoading(false);
         return;
       }
-      
-      console.log('🔍 Disease:', result.result?.disease);
-      console.log('📊 Confidence:', result.result?.confidence);
-      console.log('📑 Sections:', Object.keys(result.result?.sections || {}));
 
       if (result.result) {
-        // Save AI response to backend
+        console.log("✅ AI analysis successful, saving to backend...");
         await saveAIResponseToBackend(result);
-        
-        // Navigate to result screen
-        let responseData = result;
-        navigation.navigate('ResultScreen', { responseData });
+        navigation.navigate('ResultScreen', { responseData: result });
       } else {
         throw new Error(result.message || 'Upload failed');
       }
-    } catch (error) {
-      console.log('❌ Upload Error:', error);
+    } catch (err) {
+      console.log('❌ Upload Error:', err);
+      console.log('Error details:', err.message);
       setError('An error occurred while processing your request. Please try again.');
       setShowError(true);
       setLoading(false);
@@ -184,39 +181,38 @@ const ResultsScreen = () => {
   };
 
   useEffect(() => {
-    // TEST TOKEN ON MOUNT
     testTokenRetrieval();
     
-    // Start animations
+    // Start spinning animation
     Animated.loop(
-      Animated.timing(spinValue, {
-        toValue: 1,
-        duration: 1500,
-        useNativeDriver: true,
+      Animated.timing(spinValue, { 
+        toValue: 1, 
+        duration: 1500, 
+        useNativeDriver: true 
       })
     ).start();
-
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 800,
-      useNativeDriver: true,
+    
+    // Fade in animation
+    Animated.timing(fadeAnim, { 
+      toValue: 1, 
+      duration: 800, 
+      useNativeDriver: true 
     }).start();
-
-    // Wait 3 seconds before API call
-    const timer = setTimeout(() => {
-      setLoading(false);
-      getResult();
+    
+    // Start processing after 3 seconds
+    const timer = setTimeout(() => { 
+      setLoading(false); 
+      getResult(); 
     }, 3000);
 
-    return () => clearTimeout(timer);
+    return () => clearTimeout(timer); // Cleanup timer on unmount
   }, []);
 
-  const spin = spinValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
+  const spin = spinValue.interpolate({ 
+    inputRange: [0, 1], 
+    outputRange: ['0deg', '360deg'] 
   });
 
-  // Handle back to camera
   const handleBackToCamera = () => {
     navigation.goBack();
   };
@@ -224,121 +220,101 @@ const ResultsScreen = () => {
   return (
     <LinearGradient colors={["#e9fff3", "#ffffff"]} style={styles.container}>
       <Animated.View style={[styles.card, { opacity: fadeAnim }]}>
-        
         {showError ? (
-          // Error State UI - SHOWS BACK TO CAMERA BUTTON
           <>
             <View style={styles.errorIconContainer}>
               <Text style={styles.errorIcon}>⚠️</Text>
             </View>
-            
-            <Text style={styles.errorTitle}>Invalid Image</Text>
-            
+            <Text style={styles.errorTitle}>Processing Error</Text>
             <Text style={styles.errorMessage}>
-              {error || "Found Irrelevant Objects in the photo, please do send the photo of your hairs only"}
+              {error || "Please send a clear hair-only image"}
             </Text>
-            
-            {/* BACK TO CAMERA BUTTON - ONLY SHOWS IN ERROR STATE */}
-            <TouchableOpacity
-              style={styles.backToCameraButton}
+            <TouchableOpacity 
+              style={styles.backToCameraButton} 
               onPress={handleBackToCamera}
             >
               <Text style={styles.backToCameraButtonText}>Back to Camera</Text>
             </TouchableOpacity>
           </>
         ) : (
-          // Loading State UI - NO BACK TO CAMERA BUTTON
           <>
             <Animated.View style={[styles.loader, { transform: [{ rotate: spin }] }]}>
               <ActivityIndicator size="large" color="#00b894" />
             </Animated.View>
-
             <Text style={styles.title}>
               {loading ? "Analyzing..." : "Generating Results..."}
             </Text>
             <Text style={styles.subtitle}>
               Please wait while we process your {photos.length} image(s).
             </Text>
-
-            {/* NO BUTTON HERE - User can't go back during processing */}
           </>
         )}
-        
       </Animated.View>
     </LinearGradient>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+  container: { 
+    flex: 1, 
+    justifyContent: "center", 
+    alignItems: "center" 
   },
-  card: {
-    backgroundColor: "#ffffff",
-    width: "85%",
-    borderRadius: 20,
-    alignItems: "center",
-    padding: 30,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 8,
+  card: { 
+    backgroundColor: "#fff", 
+    width: "85%", 
+    borderRadius: 20, 
+    alignItems: "center", 
+    padding: 30, 
+    shadowColor: "#000", 
+    shadowOffset: { width: 0, height: 3 }, 
+    shadowOpacity: 0.1, 
+    shadowRadius: 8, 
+    elevation: 6 
   },
-  loader: {
-    marginBottom: 25,
+  loader: { 
+    marginBottom: 20 
   },
-  title: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#00b894",
-    marginBottom: 10,
+  title: { 
+    fontSize: 22, 
+    fontWeight: "600", 
+    color: "#0b8a46", 
+    textAlign: "center" 
   },
-  subtitle: {
-    fontSize: 16,
-    color: "#555",
-    textAlign: "center",
-    marginBottom: 40,
+  subtitle: { 
+    fontSize: 16, 
+    color: "#333", 
+    textAlign: "center", 
+    marginTop: 10 
   },
-  errorIconContainer: {
-    marginBottom: 20,
+  errorIconContainer: { 
+    marginBottom: 15 
   },
-  errorIcon: {
-    fontSize: 60,
+  errorIcon: { 
+    fontSize: 40 
   },
-  errorTitle: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#ff6b6b",
-    marginBottom: 15,
-    textAlign: "center",
+  errorTitle: { 
+    fontSize: 20, 
+    fontWeight: "600", 
+    color: "#ff4757" 
   },
-  errorMessage: {
-    fontSize: 16,
-    color: "#555",
-    textAlign: "center",
-    marginBottom: 40,
-    lineHeight: 22,
-    paddingHorizontal: 10,
+  errorMessage: { 
+    fontSize: 16, 
+    color: "#555", 
+    textAlign: "center", 
+    marginVertical: 8 
   },
-  backToCameraButton: {
-    backgroundColor: "#00b894",
-    borderRadius: 25,
-    paddingVertical: 15,
-    paddingHorizontal: 40,
-    width: "100%",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+  backToCameraButton: { 
+    marginTop: 15, 
+    backgroundColor: "#0b8a46", 
+    paddingVertical: 12, 
+    paddingHorizontal: 25, 
+    borderRadius: 30 
   },
-  backToCameraButtonText: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "bold",
+  backToCameraButtonText: { 
+    color: "#fff", 
+    fontSize: 16, 
+    fontWeight: "500" 
   },
 });
 
