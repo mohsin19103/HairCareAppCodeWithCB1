@@ -1,6 +1,6 @@
 // UserData.js
 export const userData = {
-  userId: "",           // will be filled after login
+  // No userId needed - backend will get it from JWT
   gender: "",
   age: "",
   past_hair_condition: "",

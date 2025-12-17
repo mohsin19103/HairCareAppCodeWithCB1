@@ -1,16 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Dimensions, Animated, Easing, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Dimensions, Animated, Easing } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { BlurView } from '@react-native-community/blur';
 import { userData } from '../Services/UserData';
 import { BASE_URL } from '../config/Api';
 import Toast from 'react-native-toast-message';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 
 const FamilyHistoryScreen = () => {
   const [selectedConditions, setSelectedConditions] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
   const navigation = useNavigation();
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -43,58 +45,105 @@ const FamilyHistoryScreen = () => {
     ]).start();
   };
 
-const confirmHandler = async () => {
-  try {
-      console.log("Data being sent to backend:", JSON.stringify(userData));
-    const response = await fetch(`${BASE_URL}/user/UserPrimaryDetails`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(userData),
-    });
-
-    const text = await response.text();
-    const data = text ? JSON.parse(text) : {};
-    console.log("Response from backend:", data);
-
-    if (response.ok) {
-      Toast.show({
-        type: 'success',
-        text1: 'Success',
-        text2: 'Data submitted successfully!',
-        position: 'bottom',
-        visibilityTime: 3000,
-      });
-      navigation.navigate('Scanner'); // next screen
-    } else {
+  const confirmHandler = async () => {
+    if (selectedConditions.length === 0) {
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: data.message || 'Something went wrong',
+        text2: 'Please select at least one family condition',
+        position: 'bottom',
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    
+    try {
+      // Get JWT token from AsyncStorage
+      const token = await AsyncStorage.getItem('token');
+      
+      if (!token) {
+        // REMOVED navigation.navigate('Login') - Just show error
+        Toast.show({
+          type: 'error',
+          text1: 'Session Expired',
+          text2: 'Please restart the app and login again',
+          position: 'bottom',
+          visibilityTime: 3000,
+        });
+        return;
+      }
+
+      // Remove userId from data before sending
+      const dataToSend = { ...userData };
+      delete dataToSend.userId;
+      
+      console.log("Data being sent to backend:", JSON.stringify(dataToSend));
+      console.log("Using JWT token");
+      
+      const response = await fetch(`${BASE_URL}/user/UserPrimaryDetails`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(dataToSend),
+      });
+
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : {};
+      console.log("Response from backend:", data);
+
+      if (response.ok) {
+        Toast.show({
+          type: 'success',
+          text1: 'Success',
+          text2: 'Family history saved successfully!',
+          position: 'bottom',
+          visibilityTime: 3000,
+        });
+        navigation.navigate('Scanner'); // next screen
+      } else {
+        // Handle different error cases
+        if (response.status === 401) {
+          Toast.show({
+            type: 'error',
+            text1: 'Session Expired',
+            text2: 'Your session has expired. Please restart the app.',
+            position: 'bottom',
+            visibilityTime: 3000,
+          });
+        } else if (response.status === 403) {
+          Toast.show({
+            type: 'error',
+            text1: 'Access Denied',
+            text2: 'You do not have permission to perform this action',
+            position: 'bottom',
+            visibilityTime: 3000,
+          });
+        } else {
+          Toast.show({
+            type: 'error',
+            text1: 'Error',
+            text2: data.message || `Failed to save data`,
+            position: 'bottom',
+            visibilityTime: 3000,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('API Error:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Network Error',
+        text2: 'Please check your internet connection',
         position: 'bottom',
         visibilityTime: 3000,
       });
+    } finally {
+      setIsLoading(false);
     }
-  } catch (error) {
-    Toast.show({
-      type: 'error',
-      text1: 'Error',
-      text2: error.message,
-      position: 'bottom',
-      visibilityTime: 3000,
-    });
-  }
-  
-};
-
-
-
-
-
-
-
-
-
-
+  };
 
   return (
     <LinearGradient colors={['#e8f5e9', '#ffffff']} style={styles.container}>
@@ -118,8 +167,15 @@ const confirmHandler = async () => {
       </ScrollView>
 
       <View style={styles.confirmButtonContainer}>
-        <TouchableOpacity style={[styles.confirmButton, selectedConditions.length === 0 && styles.disabledButton]} activeOpacity={0.9} onPress={confirmHandler} disabled={selectedConditions.length === 0}>
-          <Text style={styles.confirmText}>Confirm</Text>
+        <TouchableOpacity 
+          style={[styles.confirmButton, (selectedConditions.length === 0 || isLoading) && styles.disabledButton]} 
+          activeOpacity={0.9} 
+          onPress={confirmHandler} 
+          disabled={selectedConditions.length === 0 || isLoading}
+        >
+          <Text style={styles.confirmText}>
+            {isLoading ? 'Submitting...' : 'Confirm'}
+          </Text>
         </TouchableOpacity>
       </View>
     </LinearGradient>
@@ -140,7 +196,7 @@ const styles = StyleSheet.create({
   selectedText: { fontWeight: '600' },
   confirmButtonContainer: { position: 'absolute', bottom: 20, left: 25, right: 25, alignItems: 'center' },
   confirmButton: { backgroundColor: '#2e7d32', paddingVertical: 16, borderRadius: 30, alignItems: 'center', width: '100%', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 8, shadowOffset: { width: 0, height: 4 } },
-  disabledButton: { opacity: 0.6 },
+  disabledButton: { opacity: 0.6, backgroundColor: '#cccccc' },
   confirmText: { fontSize: 18, fontWeight: '600', color: '#fff' },
 });
 
