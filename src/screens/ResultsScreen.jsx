@@ -5,8 +5,9 @@ import LinearGradient from "react-native-linear-gradient";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import RNFetchBlob from 'react-native-blob-util';
 import { config } from "../config";
+import { BASE_URL } from "../config/Api";
 
-const BASE_URL = "http://10.124.177.3:8080";
+const URL = BASE_URL;
 
 const ResultsScreen = () => {
   const navigation = useNavigation();
@@ -47,7 +48,7 @@ const ResultsScreen = () => {
         try {
           const response = await RNFetchBlob.fetch(
             'POST',
-            `${BASE_URL}/api/ai-responses/uploadHairImage/${analysisId}`,
+            `${URL}/api/ai-responses/uploadHairImage/${analysisId}`,
             {
               Authorization: `Bearer ${token}`,
               'Content-Type': 'multipart/form-data',

@@ -10,6 +10,9 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Modal,
+  Animated,
+  Easing,
 } from "react-native";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import LinearGradient from "react-native-linear-gradient";
@@ -49,8 +52,13 @@ const HistoryDetail = () => {
   };
   
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [hairImages, setHairImages] = useState([]);
   const [loadingImages, setLoadingImages] = useState(true);
+  
+  // Animation values for modal
+  const modalScale = useState(new Animated.Value(0.7))[0];
+  const modalOpacity = useState(new Animated.Value(0))[0];
 
   // Build image URL from image path
   const buildImageUrl = (imagePath) => {
@@ -176,6 +184,42 @@ const HistoryDetail = () => {
     fetchHairImages();
   }, [analysisData.id]);
 
+  // Show delete modal with animation
+  const showDeleteConfirmation = () => {
+    setShowDeleteModal(true);
+    Animated.parallel([
+      Animated.spring(modalScale, {
+        toValue: 1,
+        friction: 8,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+      Animated.timing(modalOpacity, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  // Hide delete modal with animation
+  const hideDeleteModal = () => {
+    Animated.parallel([
+      Animated.timing(modalScale, {
+        toValue: 0.7,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(modalOpacity, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setShowDeleteModal(false);
+    });
+  };
+
   // Delete analysis function
   const deleteAnalysis = async () => {
     try {
@@ -189,6 +233,7 @@ const HistoryDetail = () => {
           [{ text: "OK" }]
         );
         setIsDeleting(false);
+        hideDeleteModal();
         return;
       }
 
@@ -205,21 +250,16 @@ const HistoryDetail = () => {
       console.log("✅ Delete response:", response.status);
 
       if (response.status === 200 || response.status === 204) {
-        Alert.alert(
-          "Success",
-          "Analysis deleted successfully!",
-          [
-            {
-              text: "OK",
-              onPress: () => {
-                navigation.goBack();
-                if (route.params?.onDelete) {
-                  route.params.onDelete(analysisData.id);
-                }
-              }
+        // Show success message
+        setTimeout(() => {
+          hideDeleteModal();
+          setTimeout(() => {
+            navigation.goBack();
+            if (route.params?.onDelete) {
+              route.params.onDelete(analysisData.id);
             }
-          ]
-        );
+          }, 300);
+        }, 500);
       } else {
         throw new Error("Failed to delete analysis");
       }
@@ -244,33 +284,15 @@ const HistoryDetail = () => {
       }
       
       Alert.alert("Error", errorMessage, [{ text: "OK" }]);
+      hideDeleteModal();
     } finally {
       setIsDeleting(false);
     }
   };
 
-  // Show delete confirmation modal
-  const confirmDelete = () => {
-    Alert.alert(
-      "Delete Analysis",
-      `Are you sure you want to delete this analysis for "${analysisData.disease}"?\n\nThis action cannot be undone.`,
-      [
-        {
-          text: "Cancel",
-          style: "cancel"
-        },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: deleteAnalysis
-        }
-      ]
-    );
-  };
-
   // Function to format section content as text
   const formatSectionContent = (content) => {
-    if (!content) return "No information available";
+    if (!content) return <Text style={styles.sectionText}>No information available</Text>;
     
     if (Array.isArray(content)) {
       return content.map((item, index) => {
@@ -333,7 +355,7 @@ const HistoryDetail = () => {
           <View style={styles.headerRightButtons}>
             <TouchableOpacity 
               style={styles.deleteButton}
-              onPress={confirmDelete}
+              onPress={showDeleteConfirmation}
               disabled={isDeleting}
             >
               <Ionicons name="trash-outline" size={22} color="#d32f2f" />
@@ -345,6 +367,7 @@ const HistoryDetail = () => {
         </View>
 
         <ScrollView
+          style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
@@ -407,7 +430,7 @@ const HistoryDetail = () => {
                               console.log(`❌ Failed to load thumbnail ${index + 1}:`, e.nativeEvent.error);
                             }}
                           />
-                          <Text style={styles.thumbnailLabel}>{index + 1}</Text>
+                          <Text style={styles.thumbnailLabel}>{String(index + 1)}</Text>
                         </View>
                       ))}
                     </ScrollView>
@@ -488,6 +511,84 @@ const HistoryDetail = () => {
           </Text>
         </ScrollView>
 
+        {/* Professional Delete Confirmation Modal */}
+        <Modal
+          visible={showDeleteModal}
+          transparent={true}
+          animationType="none"
+          onRequestClose={hideDeleteModal}
+        >
+          <Animated.View style={[styles.modalOverlay, { opacity: modalOpacity }]}>
+            <Animated.View style={[styles.modalContent, { transform: [{ scale: modalScale }] }]}>
+              {/* Modal Header */}
+              <View style={styles.modalHeader}>
+                <View style={styles.modalIconContainer}>
+                  <Ionicons name="warning" size={40} color="#d32f2f" />
+                </View>
+                <Text style={styles.modalTitle}>Delete Analysis</Text>
+                <Text style={styles.modalSubtitle}>
+                  Are you sure you want to delete this analysis?
+                </Text>
+              </View>
+
+              {/* Modal Body */}
+              <View style={styles.modalBody}>
+                <View style={styles.analysisInfo}>
+                  <Text style={styles.infoLabel}>Condition:</Text>
+                  <Text style={styles.infoValue}>{analysisData.disease || "Unknown"}</Text>
+                </View>
+                
+                <View style={styles.analysisInfo}>
+                  <Text style={styles.infoLabel}>Confidence:</Text>
+                  <Text style={styles.infoValue}>
+                    {analysisData.confidence ? analysisData.confidence.toFixed(2) + '%' : 'N/A'}
+                  </Text>
+                </View>
+                
+                <View style={styles.analysisInfo}>
+                  <Text style={styles.infoLabel}>Date:</Text>
+                  <Text style={styles.infoValue}>
+                    {formatDate(analysisData.created_at).split(',')[0]}
+                  </Text>
+                </View>
+                
+                <View style={styles.warningBox}>
+                  <Ionicons name="alert-circle-outline" size={18} color="#f57c00" />
+                  <Text style={styles.warningText}>
+                    This action cannot be undone. All data including images and analysis will be permanently deleted.
+                  </Text>
+                </View>
+              </View>
+
+              {/* Modal Footer */}
+              <View style={styles.modalFooter}>
+                <TouchableOpacity 
+                  style={styles.cancelButton}
+                  onPress={hideDeleteModal}
+                  disabled={isDeleting}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.confirmDeleteButton}
+                  onPress={deleteAnalysis}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="trash-outline" size={18} color="#fff" />
+                      <Text style={styles.confirmDeleteButtonText}>Delete Permanently</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </Animated.View>
+          </Animated.View>
+        </Modal>
+
         {/* Loading Overlay for Delete */}
         {isDeleting && (
           <View style={styles.loadingOverlay}>
@@ -553,6 +654,9 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 20,
     backgroundColor: "#f1f8e9",
+  },
+  scrollView: {
+    flex: 1,
   },
   scrollContent: {
     padding: 20,
@@ -816,6 +920,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#95a5a6",
     marginTop: 20,
+    marginBottom: 20,
   },
   
   // Loading Overlay
@@ -828,6 +933,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0, 0, 0, 0.5)",
     justifyContent: "center",
     alignItems: "center",
+    zIndex: 1000,
   },
   loadingContainer: {
     backgroundColor: "#ffffff",
@@ -845,6 +951,133 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#2e7d32",
     fontWeight: "600",
+  },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+    zIndex: 1001,
+  },
+  modalContent: {
+    width: "100%",
+    maxWidth: 400,
+    backgroundColor: "#ffffff",
+    borderRadius: 24,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalHeader: {
+    alignItems: "center",
+    padding: 30,
+    paddingBottom: 20,
+    backgroundColor: "#fff9f9",
+    borderBottomWidth: 1,
+    borderBottomColor: "#ffebee",
+  },
+  modalIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#ffebee",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#d32f2f",
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontSize: 16,
+    color: "#666",
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  modalBody: {
+    padding: 30,
+    paddingTop: 20,
+  },
+  analysisInfo: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f5f5f5",
+  },
+  infoLabel: {
+    fontSize: 14,
+    color: "#666",
+    fontWeight: "500",
+  },
+  infoValue: {
+    fontSize: 15,
+    color: "#333",
+    fontWeight: "600",
+  },
+  warningBox: {
+    flexDirection: "row",
+    backgroundColor: "#fff8e1",
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 20,
+    alignItems: "flex-start",
+  },
+  warningText: {
+    fontSize: 14,
+    color: "#f57c00",
+    marginLeft: 12,
+    flex: 1,
+    lineHeight: 20,
+  },
+  modalFooter: {
+    flexDirection: "row",
+    padding: 20,
+    paddingTop: 10,
+    backgroundColor: "#fafafa",
+    borderTopWidth: 1,
+    borderTopColor: "#f0f0f0",
+  },
+  cancelButton: {
+    flex: 1,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    backgroundColor: "#f5f5f5",
+    borderRadius: 14,
+    alignItems: "center",
+    marginRight: 10,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#666",
+  },
+  confirmDeleteButton: {
+    flex: 1,
+    flexDirection: "row",
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    backgroundColor: "#d32f2f",
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 10,
+  },
+  confirmDeleteButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#ffffff",
+    marginLeft: 8,
   },
 });
 

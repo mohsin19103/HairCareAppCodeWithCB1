@@ -11,6 +11,7 @@ import {
   SafeAreaView,
   Modal,
   Pressable,
+  Dimensions,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -22,7 +23,8 @@ import FontAwesome5 from "react-native-vector-icons/FontAwesome5";
 import { BlurView } from "@react-native-community/blur";
 import { BASE_URL } from "../config/Api";
 
-const API_BASE_URL = BASE_URL ;
+const API_BASE_URL = BASE_URL;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const ProfileScreen = () => {
   const navigation = useNavigation();
@@ -31,34 +33,40 @@ const ProfileScreen = () => {
   const [uploading, setUploading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
 
-  // Sample user data for demonstration
+  // Updated user data for hair care app
   const sampleUser = {
-    first_name: "John",
-    last_name: "Doe",
-    email: "john.doe@example.com",
+    first_name: "Lucas",
+    last_name: "Bennett",
+    email: "lucasbennett@gmail.com",
     gender: "Male",
     age: 32,
     country: "United States",
-    role: "Premium User",
+    hair_type: "Curly",
+    scalp_condition: "Normal",
+    hair_concerns: ["Dryness", "Frizz"],
+    last_analysis_date: "2024-01-15",
+    weekly_growth: "1.2cm",
+    total_analyses: 8,
+    recommended_products: [
+      { name: "Moisturizing Shampoo", brand: "Olaplex" },
+      { name: "Repair Mask", brand: "Kerastase" }
+    ],
     status: "Active",
-    imagePath: null
+    imagePath: null,
   };
 
   useEffect(() => {
     const loadUser = async () => {
       try {
-        // Try to load user from AsyncStorage
         const savedUser = await AsyncStorage.getItem("user");
         if (savedUser) {
           setUser(JSON.parse(savedUser));
         } else {
-          // Use sample data if no user found (for demo)
           setUser(sampleUser);
           await AsyncStorage.setItem("user", JSON.stringify(sampleUser));
         }
       } catch (error) {
         console.log("Error loading user:", error);
-        // Fallback to sample data
         setUser(sampleUser);
       } finally {
         setLoading(false);
@@ -68,7 +76,6 @@ const ProfileScreen = () => {
   }, []);
 
   const handleImageUpload = async () => {
-    // Launch image library to select a photo
     ImagePicker.launchImageLibrary(
       { 
         mediaType: "photo", 
@@ -87,7 +94,7 @@ const ProfileScreen = () => {
             type: "error",
             text1: "Image error",
             text2: response.errorMessage,
-              visibilityTime: 2000,
+            visibilityTime: 2000,
           });
           return;
         }
@@ -98,10 +105,8 @@ const ProfileScreen = () => {
         try {
           setUploading(true);
           
-          // Get the token for authentication
           const token = await AsyncStorage.getItem("token");
           
-          // Create form data for the image upload
           const formData = new FormData();
           formData.append('imageFile', {
             uri: asset.uri,
@@ -109,7 +114,6 @@ const ProfileScreen = () => {
             name: asset.fileName || `profile_${Date.now()}.jpg`,
           });
 
-          // Make the API call to upload the image
           const uploadResponse = await axios.post(
             `${API_BASE_URL}/image/uploadImage`, 
             formData,
@@ -122,7 +126,6 @@ const ProfileScreen = () => {
           );
 
           if (uploadResponse.data && uploadResponse.data.imagePath) {
-            // Update user with new image path
             const updatedUser = { 
               ...user, 
               imagePath: uploadResponse.data.imagePath 
@@ -135,7 +138,7 @@ const ProfileScreen = () => {
               type: "success",
               text1: "Profile updated",
               text2: "Image uploaded successfully!",
-                visibilityTime: 2000,
+              visibilityTime: 2000,
             });
           } else {
             throw new Error("Invalid response from server");
@@ -143,7 +146,6 @@ const ProfileScreen = () => {
         } catch (err) {
           console.log("Upload error:", err);
           
-          // For demo purposes, if API fails, use the local image URI
           if (asset.uri) {
             const updatedUser = { ...user, imagePath: asset.uri };
             setUser(updatedUser);
@@ -159,7 +161,7 @@ const ProfileScreen = () => {
               type: "error",
               text1: "Upload failed",
               text2: "Try again later.",
-                visibilityTime: 2000,
+              visibilityTime: 2000,
             });
           }
         } finally {
@@ -178,35 +180,38 @@ const ProfileScreen = () => {
       type: "success",
       text1: "Photo removed",
       text2: "Your profile photo has been removed.",
-        visibilityTime: 2000,
+      visibilityTime: 2000,
     });
     setModalVisible(false);
   };
 
-  // Function to get the image source based on the imagePath
+  // Function to handle Record button press - navigates to UserHistory
+  const handleRecordPress = () => {
+    navigation.navigate("UserHistory");
+  };
+
   const getImageSource = () => {
     if (!user || !user.imagePath) {
       return require("../assets/female.png");
     }
     
-    // Check if imagePath is a local URI (starts with file://)
+    if (typeof user.imagePath !== 'string') {
+      return require("../assets/female.png");
+    }
+    
     if (user.imagePath.startsWith('file://')) {
       return { uri: user.imagePath };
     }
     
-    // Check if imagePath is a URL (starts with http:// or https://)
     if (user.imagePath.startsWith('http://') || user.imagePath.startsWith('https://')) {
       return { uri: user.imagePath };
     }
     
-    // If it's a server path, construct the full URL
-    if (user.imagePath.includes('D:/images/')) {
-      // Extract just the filename from the path
+    if (user.imagePath.includes && user.imagePath.includes('D:/images/')) {
       const filename = user.imagePath.replace('D:/images/', '');
       return { uri: `${API_BASE_URL}/image/getImage?imagePath=images/${filename}` };
     }
     
-    // Default case
     return require("../assets/female.png");
   };
 
@@ -228,24 +233,24 @@ const ProfileScreen = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView style={styles.container}>
-        {/* Header */}
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+        {/* Header with Back Button */}
         <View style={styles.header}>
-          <Text style={styles.headerText}>My Profile</Text>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Icon name="x" size={26} color="#2e7d32" />
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Icon name="chevron-left" size={28} color="#000" />
           </TouchableOpacity>
+          <Text style={styles.headerTitle}>My Hair Profile</Text>
+          <View style={{ width: 28 }} />
         </View>
 
-        {/* Profile Image Section with Camera Icon */}
-        <View style={styles.imageWrapper}>
+        {/* Profile Info Section */}
+        <View style={styles.profileSection}>
           <View style={styles.imageContainer}>
             <Image
               source={getImageSource()}
               style={styles.profileImage}
               onError={(e) => {
                 console.log("Error loading image:", e.nativeEvent.error);
-                // Fallback to default image if there's an error
                 return require("../assets/female.png");
               }}
             />
@@ -259,89 +264,167 @@ const ProfileScreen = () => {
               onPress={() => setModalVisible(true)}
               disabled={uploading}
             >
-              <FontAwesome5 name="camera" size={20} color="#fff" />
+              <FontAwesome5 name="camera" size={16} color="#fff" />
             </TouchableOpacity>
+          </View>
+          
+          <Text style={styles.userName}>{user.first_name || ''} {user.last_name || ''}</Text>
+          <Text style={styles.userEmail}>{user.email || ''}</Text>
+        </View>
+
+        {/* Record Button - Now navigates to UserHistory */}
+        <TouchableOpacity style={styles.recordButton} onPress={handleRecordPress}>
+          <Icon name="clipboard" size={20} color="#fff" style={{ marginRight: 10 }} />
+          <Text style={styles.recordButtonText}>View Hair History</Text>
+        </TouchableOpacity>
+
+        {/* Hair Analysis Stats */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statCard}>
+            <View style={styles.statIconContainer}>
+              <Icon name="bar-chart-2" size={24} color="#2e7d32" />
+            </View>
+            <Text style={styles.statNumber}>{user.total_analyses || 0}</Text>
+            <Text style={styles.statLabel}>Total Analyses</Text>
+          </View>
+          
+          <View style={styles.statCard}>
+            <View style={styles.statIconContainer}>
+              <Icon name="trending-up" size={24} color="#2e7d32" />
+            </View>
+            <Text style={styles.statNumber}>{user.weekly_growth || '0cm'}</Text>
+            <Text style={styles.statLabel}>Weekly Growth</Text>
           </View>
         </View>
 
-        {/* Modern Apple-style Modal */}
-        {/* Modern Apple-style Modal */}
-<Modal
-  transparent={true}
-  visible={modalVisible}
-  animationType="slide"
-  onRequestClose={() => setModalVisible(false)}
->
-  <View style={styles.modalBackground}>
-    {/* Blurred background */}
-    <BlurView style={StyleSheet.absoluteFill} blurType="light" blurAmount={25} />
-
-    {/* Modal sheet */}
-    <View style={styles.modalSheet}>
-      {user.imagePath && (
-        <Pressable style={styles.modalButton} onPress={handleRemovePhoto}>
-          <Text style={[styles.modalButtonText, styles.destructiveText]}>
-            Remove Current Photo
-          </Text>
-        </Pressable>
-      )}
-
-      <Pressable style={styles.modalButton} onPress={handleImageUpload}>
-        <Text style={styles.modalButtonText}>Upload New Photo</Text>
-      </Pressable>
-
-      <Pressable style={[styles.modalButton, styles.cancelButton]} onPress={() => setModalVisible(false)}>
-        <Text style={[styles.modalButtonText, { color: "#007AFF" }]}>Cancel</Text>
-      </Pressable>
-    </View>
-  </View>
-</Modal>
-
-
-        {/* User Details */}
+        {/* Hair Details Section */}
         <View style={styles.detailsCard}>
-          <Text style={styles.label}>First Name</Text>
-          <Text style={styles.value}>{user.first_name}</Text>
-
-          <Text style={styles.label}>Last Name</Text>
-          <Text style={styles.value}>{user.last_name}</Text>
-
-          <Text style={styles.label}>Email</Text>
-          <Text style={styles.value}>{user.email}</Text>
-
-          <Text style={styles.label}>Gender</Text>
-          <Text style={styles.value}>{user.gender}</Text>
-
-          <Text style={styles.label}>Age</Text>
-          <Text style={styles.value}>{user.age}</Text>
-
-          <Text style={styles.label}>Country</Text>
-          <Text style={styles.value}>{user.country}</Text>
-
-          <Text style={styles.label}>Role</Text>
-          <Text style={styles.value}>{user.role}</Text>
-
-          <Text style={styles.label}>Status</Text>
-          <Text style={[styles.value, styles.statusActive]}>{user.status}</Text>
+          <Text style={styles.sectionTitle}>Hair Information</Text>
+          
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Hair Type</Text>
+            <Text style={styles.detailValue}>{user.hair_type || 'Not Set'}</Text>
+          </View>
+          
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Scalp Condition</Text>
+            <Text style={styles.detailValue}>{user.scalp_condition || 'Not Set'}</Text>
+          </View>
+          
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Last Analysis</Text>
+            <Text style={styles.detailValue}>{user.last_analysis_date || 'Never'}</Text>
+          </View>
+          
+          {user.hair_concerns && user.hair_concerns.length > 0 && (
+            <View style={styles.concernsContainer}>
+              <Text style={styles.detailLabel}>Hair Concerns</Text>
+              <View style={styles.concernsList}>
+                {user.hair_concerns.map((concern, index) => (
+                  <View key={index} style={styles.concernTag}>
+                    <Text style={styles.concernText}>{concern}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
         </View>
-        
-        {/* Additional Actions */}
+
+        {/* Recommended Products Section */}
+        {user.recommended_products && user.recommended_products.length > 0 && (
+          <View style={styles.productsCard}>
+            <Text style={styles.sectionTitle}>Recommended Products</Text>
+            {user.recommended_products.map((product, index) => (
+              <TouchableOpacity key={index} style={styles.productItem}>
+                <View style={styles.productIcon}>
+                  <Icon name="shopping-bag" size={20} color="#2e7d32" />
+                </View>
+                <View style={styles.productInfo}>
+                  <Text style={styles.productName}>{product.name}</Text>
+                  <Text style={styles.productBrand}>{product.brand}</Text>
+                </View>
+                <Icon name="chevron-right" size={20} color="#999" />
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* Weekly Growth Update Section */}
+        <View style={styles.growthUpdateCard}>
+          <Text style={styles.sectionTitle}>Weekly Growth Update</Text>
+          
+          <View style={styles.growthProgressContainer}>
+            <View style={styles.growthProgressBar}>
+              <View style={[styles.growthProgressFill, { width: '60%' }]} />
+            </View>
+            <View style={styles.growthStats}>
+              <View style={styles.growthStat}>
+                <Text style={styles.growthStatValue}>+1.2cm</Text>
+                <Text style={styles.growthStatLabel}>This Week</Text>
+              </View>
+              <View style={styles.growthStat}>
+                <Text style={styles.growthStatValue}>+4.8cm</Text>
+                <Text style={styles.growthStatLabel}>This Month</Text>
+              </View>
+            </View>
+          </View>
+          
+          <TouchableOpacity style={styles.updateButton}>
+            <Icon name="refresh-cw" size={18} color="#2e7d32" />
+            <Text style={styles.updateButtonText}>Update Measurements</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Quick Actions */}
         <View style={styles.actionsCard}>
           <TouchableOpacity style={styles.actionButton}>
-            <Icon name="edit" size={20} color="#2e7d32" />
-            <Text style={styles.actionText}>Edit Profile</Text>
+            <View style={styles.actionIcon}>
+              <Icon name="settings" size={20} color="#2e7d32" />
+            </View>
+            <Text style={styles.actionText}>Hair Care Settings</Text>
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.actionButton}>
-            <Icon name="shield" size={20} color="#2e7d32" />
-            <Text style={styles.actionText}>Privacy Settings</Text>
+            <View style={styles.actionIcon}>
+              <Icon name="calendar" size={20} color="#2e7d32" />
+            </View>
+            <Text style={styles.actionText}>Treatment Schedule</Text>
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.actionButton}>
-            <Icon name="bell" size={20} color="#2e7d32" />
-            <Text style={styles.actionText}>Notification Preferences</Text>
+            <View style={styles.actionIcon}>
+              <Icon name="help-circle" size={20} color="#2e7d32" />
+            </View>
+            <Text style={styles.actionText}>Hair Care Tips</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Image Upload Modal */}
+        <Modal
+          transparent={true}
+          visible={modalVisible}
+          animationType="slide"
+          onRequestClose={() => setModalVisible(false)}
+        >
+          <View style={styles.modalBackground}>
+            <BlurView style={StyleSheet.absoluteFill} blurType="light" blurAmount={25} />
+            <View style={styles.modalSheet}>
+              {user.imagePath && (
+                <Pressable style={styles.modalButton} onPress={handleRemovePhoto}>
+                  <Text style={[styles.modalButtonText, styles.destructiveText]}>
+                    Remove Current Photo
+                  </Text>
+                </Pressable>
+              )}
+              <Pressable style={styles.modalButton} onPress={handleImageUpload}>
+                <Text style={styles.modalButtonText}>Upload New Photo</Text>
+              </Pressable>
+              <Pressable style={[styles.modalButton, styles.cancelButton]} onPress={() => setModalVisible(false)}>
+                <Text style={[styles.modalButtonText, { color: "#007AFF" }]}>Cancel</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
 
         <Toast />
       </ScrollView>
@@ -352,56 +435,62 @@ const ProfileScreen = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#f5f5f7",
+    backgroundColor: "#f8f9fa",
   },
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f7",
-    padding: 20,
+    backgroundColor: "#f8f9fa",
+    paddingHorizontal: 20,
   },
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  // Header
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 20,
     alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 15,
+    marginBottom: 10,
   },
-  headerText: {
-    fontSize: 24,
-    fontWeight: "bold",
+  backButton: {
+    padding: 5,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: "600",
     color: "#2e7d32",
   },
-  imageWrapper: {
+  // Profile Section
+  profileSection: {
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 25,
   },
   imageContainer: {
     position: "relative",
     marginBottom: 15,
   },
   profileImage: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     borderWidth: 3,
     borderColor: "#2e7d32",
   },
   cameraIcon: {
     position: "absolute",
-    bottom: 5,
-    right: 5,
+    bottom: 0,
+    right: 0,
     backgroundColor: "#2e7d32",
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 2,
     borderColor: "#fff",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 5,
   },
   uploadOverlay: {
     position: "absolute",
@@ -410,96 +499,247 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: "rgba(0,0,0,0.4)",
-    borderRadius: 70,
+    borderRadius: 50,
     justifyContent: "center",
     alignItems: "center",
-    zIndex: 1,
   },
-  // Modal Styles
-// Modal Styles (Apple-style)
-modalBackground: {
-  flex: 1,
-  justifyContent: "flex-end",
-  backgroundColor: "rgba(0,0,0,0.3)",
-},
-modalSheet: {
-  width: "100%",
-  backgroundColor: "#dcfdd3ff",
-  borderTopLeftRadius: 25,
-  borderTopRightRadius: 25,
-  paddingVertical: 20,
-  paddingHorizontal: 20,
-  alignItems: "center",
-  shadowColor: "#000",
-  shadowOffset: { width: 0, height: -3 },
-  shadowOpacity: 0.1,
-  shadowRadius: 10,
-  elevation: 10,
-},
-modalButton: {
-  width: "80%",
-  paddingVertical: 16,
-  alignItems: "center",
-  justifyContent: "center",
-  borderRadius: 14,
-  marginVertical: 6,
-  backgroundColor: "#2e7d32",
-  shadowColor: "#000",
-  shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.08,
-  shadowRadius: 4,
-  elevation: 3,
-},
-modalButtonText: {
-  fontSize: 18,
-  fontWeight: "500",
-  color: "#ffffffff",
-},
-destructiveText: {
-  color: "#f9f6f5ff",
-},
-cancelButton: {
-  backgroundColor: "#E5E5EA",
-  marginTop: 8,
-  color:"#2e7d32"
-},
-
-  detailsCard: {
-    backgroundColor: "#fff",
-    padding: 20,
-    borderRadius: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 14,
-    color: "#777",
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  value: {
-    fontSize: 16,
+  userName: {
+    fontSize: 24,
     fontWeight: "600",
     color: "#000",
     marginBottom: 4,
   },
-  statusActive: {
-    color: "#2e7d32",
+  userEmail: {
+    fontSize: 16,
+    color: "#666",
   },
-  actionsCard: {
-    backgroundColor: "#fff",
-    padding: 15,
-    borderRadius: 12,
+  // Record Button
+  recordButton: {
+    backgroundColor: "#2e7d32",
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 25,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    marginBottom: 25,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  recordButtonText: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "600",
+  },
+  // Stats Container
+  statsContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 25,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 20,
+    alignItems: "center",
+    marginHorizontal: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  statIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: "#f0f7f0",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  statNumber: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#000",
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+  },
+  // Section Title
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#000",
+    marginBottom: 15,
+  },
+  // Details Card
+  detailsCard: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  detailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+  },
+  detailLabel: {
+    fontSize: 16,
+    color: "#666",
+  },
+  detailValue: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#000",
+  },
+  // Concerns
+  concernsContainer: {
+    paddingVertical: 12,
+  },
+  concernsList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: 8,
+  },
+  concernTag: {
+    backgroundColor: "#f0f7f0",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  concernText: {
+    color: "#2e7d32",
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  // Products Card
+  productsCard: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  productItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+  },
+  productIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#f0f7f0",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 15,
+  },
+  productInfo: {
+    flex: 1,
+  },
+  productName: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#000",
+    marginBottom: 2,
+  },
+  productBrand: {
+    fontSize: 14,
+    color: "#666",
+  },
+  // Growth Update Card
+  growthUpdateCard: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  growthProgressContainer: {
+    marginBottom: 20,
+  },
+  growthProgressBar: {
+    height: 8,
+    backgroundColor: "#e0e0e0",
+    borderRadius: 4,
+    overflow: "hidden",
+    marginBottom: 15,
+  },
+  growthProgressFill: {
+    height: "100%",
+    backgroundColor: "#2e7d32",
+    borderRadius: 4,
+  },
+  growthStats: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+  },
+  growthStat: {
+    alignItems: "center",
+  },
+  growthStatValue: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#2e7d32",
+    marginBottom: 4,
+  },
+  growthStatLabel: {
+    fontSize: 14,
+    color: "#666",
+  },
+  updateButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#f0f7f0",
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  updateButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#2e7d32",
+    marginLeft: 10,
+  },
+  // Actions Card
+  actionsCard: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 15,
     marginBottom: 30,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
   actionButton: {
     flexDirection: "row",
@@ -508,15 +748,55 @@ cancelButton: {
     borderBottomWidth: 1,
     borderBottomColor: "#f0f0f0",
   },
-  actionText: {
-    marginLeft: 15,
-    fontSize: 16,
-    color: "#333",
-  },
-  center: {
-    flex: 1,
+  actionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#f0f7f0",
     justifyContent: "center",
     alignItems: "center",
+    marginRight: 15,
+  },
+  actionText: {
+    fontSize: 16,
+    color: "#333",
+    flex: 1,
+  },
+  // Modal Styles
+  modalBackground: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.3)",
+  },
+  modalSheet: {
+    width: "100%",
+    backgroundColor: "#dcfdd3ff",
+    borderTopLeftRadius: 25,
+    borderTopRightRadius: 25,
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+    alignItems: "center",
+  },
+  modalButton: {
+    width: "80%",
+    paddingVertical: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 14,
+    marginVertical: 6,
+    backgroundColor: "#2e7d32",
+  },
+  modalButtonText: {
+    fontSize: 18,
+    fontWeight: "500",
+    color: "#ffffffff",
+  },
+  destructiveText: {
+    color: "#f9f6f5ff",
+  },
+  cancelButton: {
+    backgroundColor: "#E5E5EA",
+    marginTop: 8,
   },
 });
 
